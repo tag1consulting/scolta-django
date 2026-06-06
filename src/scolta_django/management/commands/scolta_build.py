@@ -14,7 +14,7 @@ from scolta.index.orchestrator import IndexBuildOrchestrator
 from scolta.memory_budget_config import MemoryBudgetConfig
 
 from ... import conf
-from ...content_source import DjangoContentSource
+from ...content_source import get_content_source
 
 
 class Command(BaseCommand):
@@ -31,7 +31,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options) -> None:
         config = conf.scolta_config()
-        source = DjangoContentSource()
+        source = get_content_source()
         budget = self._budget(options)
 
         if options["incremental"]:

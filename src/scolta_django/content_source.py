@@ -12,6 +12,19 @@ from . import conf
 from .models import ACTION_DELETE, ACTION_INDEX, ScoltaTracker
 
 
+def get_content_source() -> DjangoContentSource:
+    """Return the active content source — WagtailContentSource when Wagtail is
+    enabled (``SCOLTA['wagtail']`` truthy) and installed, else the ORM source."""
+    if conf.get("wagtail"):
+        try:
+            from .wagtail import WagtailContentSource
+
+            return WagtailContentSource()
+        except ImportError:
+            pass
+    return DjangoContentSource()
+
+
 def _searchable_queryset(model):
     if hasattr(model, "searchable_queryset"):
         return model.searchable_queryset()

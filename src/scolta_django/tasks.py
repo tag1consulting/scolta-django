@@ -14,7 +14,7 @@ from scolta.index.build_intent import BuildIntent
 from scolta.index.orchestrator import IndexBuildOrchestrator
 
 from . import conf
-from .content_source import DjangoContentSource
+from .content_source import get_content_source
 
 _DEBOUNCE_KEY = "scolta_rebuild_scheduled"
 
@@ -40,7 +40,7 @@ def _dispatch(force: bool, delay: int) -> None:
 def trigger_rebuild(force: bool = False) -> bool:
     """Run a full rebuild over all published content. Returns build success."""
     cache.delete(_DEBOUNCE_KEY)
-    source = DjangoContentSource()
+    source = get_content_source()
     config = conf.scolta_config()
     budget = _budget()
 

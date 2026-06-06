@@ -18,10 +18,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional Wagtail integration (auto-loaded when installed).
+wagtail = ["wagtail>=5.2"]
 dev = [
     "pytest>=8.0",
     "pytest-django>=4.8",
     "ruff>=0.5",
+    "wagtail>=5.2",
 ]
 
 [tool.uv.sources]
