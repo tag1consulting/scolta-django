@@ -1,0 +1,220 @@
+{% comment %}
+    Amazee.ai settings page (Django port of resources/views/amazee-settings.blade.php).
+
+    Multi-step Alpine.js UI for the Amazee.ai connection flow:
+      - start:        email input + "Start trial" / "Sign in" buttons
+      - verification: code input
+      - region:       region selection list
+      - connected:    status display + disconnect button
+
+    The flow is stateless on the server: the short-lived session token returned
+    by sign-in is held client-side and passed back to /regions and /upgrade. The
+    server-rendered `step` provides the initial state without an extra round-trip.
+{% endcomment %}
+{{ routes|json_script:"amazee-routes" }}
+<div id="scolta-amazee"
+     x-data="amazeeSettings('{{ step }}', JSON.parse(document.getElementById('amazee-routes').textContent))"
+     x-init="init()">
+
+    {# Connected #}
+    <template x-if="step === 'connected'">
+        <div>
+            <p>
+                Connected to Amazee.ai
+                <template x-if="region">
+                    <span>(region: <strong x-text="region"></strong>)</span>
+                </template>.
+            </p>
+            <button type="button" @click="disconnect()" :disabled="loading" class="btn btn-secondary">
+                <span x-show="loading">Disconnecting&hellip;</span>
+                <span x-show="!loading">Disconnect</span>
+            </button>
+            <p x-show="error" x-text="error" class="text-danger mt-2"></p>
+        </div>
+    </template>
+
+    {# Provider already configured — Amazee.ai not needed #}
+    <template x-if="step === 'provider-configured'">
+        <div>
+            <p>AI provider already configured. Amazee.ai is not needed.</p>
+            <button type="button" @click="step = 'start'" class="btn btn-secondary btn-sm">
+                Set up Amazee.ai anyway
+            </button>
+        </div>
+    </template>
+
+    {# Start: email + trial/sign-in #}
+    <template x-if="step === 'start'">
+        <div>
+            <p>Connect Scolta to Amazee.ai for privacy-respecting, budget-aware AI search.</p>
+            <div class="mb-3">
+                <label for="amazee-email">Email address</label>
+                <input type="email" id="amazee-email" x-model="email" class="form-control" />
+            </div>
+            <p x-show="error" x-text="error" class="text-danger"></p>
+            <button type="button" @click="startTrial()" :disabled="loading" class="btn btn-primary me-2">
+                <span x-show="loading">Starting&hellip;</span>
+                <span x-show="!loading">Start free trial</span>
+            </button>
+            <button type="button" @click="requestCode()" :disabled="loading" class="btn btn-secondary">
+                Sign in to existing account
+            </button>
+        </div>
+    </template>
+
+    {# Verification code #}
+    <template x-if="step === 'verification'">
+        <div>
+            <p>A verification code has been sent to <strong x-text="email"></strong>. Enter it below.</p>
+            <div class="mb-3">
+                <label for="amazee-code">Verification code</label>
+                <input type="text" id="amazee-code" x-model="code" autocomplete="one-time-code" class="form-control" />
+            </div>
+            <p x-show="error" x-text="error" class="text-danger"></p>
+            <button type="button" @click="verifyCode()" :disabled="loading" class="btn btn-primary me-2">
+                <span x-show="loading">Verifying&hellip;</span>
+                <span x-show="!loading">Verify code</span>
+            </button>
+            <button type="button" @click="step = 'start'; error = ''" :disabled="loading" class="btn btn-secondary">
+                Back
+            </button>
+        </div>
+    </template>
+
+    {# Region selection #}
+    <template x-if="step === 'region'">
+        <div>
+            <p>Select the region where your AI requests will be processed.</p>
+            <p x-show="loadingRegions">Loading regions&hellip;</p>
+            <div x-show="!loadingRegions && regions.length > 0" class="mb-3">
+                <template x-for="r in regions" :key="r.id">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" :id="'region-' + r.id"
+                               :value="r.id" x-model="selectedRegion" />
+                        <label class="form-check-label" :for="'region-' + r.id" x-text="r.name ?? r.id"></label>
+                    </div>
+                </template>
+            </div>
+            <p x-show="error" x-text="error" class="text-danger"></p>
+            <button type="button" @click="connectRegion()" :disabled="loading || !selectedRegion" class="btn btn-primary me-2">
+                <span x-show="loading">Connecting&hellip;</span>
+                <span x-show="!loading">Connect</span>
+            </button>
+            <button type="button" @click="step = 'start'; error = ''" :disabled="loading" class="btn btn-secondary">
+                Back
+            </button>
+        </div>
+    </template>
+
+</div>
+
+<script>
+function amazeeSettings(initialStep, routes) {
+    return {
+        step: initialStep || 'start',
+        email: '',
+        code: '',
+        sessionToken: '',
+        region: null,
+        regions: [],
+        selectedRegion: '',
+        loading: false,
+        loadingRegions: false,
+        error: '',
+        routes: routes,
+
+        async init() {
+            if (this.step === 'connected') {
+                try {
+                    const res = await this.get(this.routes.status);
+                    this.region = res.region;
+                } catch (e) { /* status is best-effort */ }
+            }
+        },
+
+        async startTrial() {
+            this.error = ''; this.loading = true;
+            try {
+                const res = await this.post(this.routes.provision, { email: this.email });
+                this.region = res.region;
+                this.step = 'connected';
+            } catch (e) { this.error = e.message; } finally { this.loading = false; }
+        },
+
+        async requestCode() {
+            this.error = ''; this.loading = true;
+            try {
+                await this.post(this.routes.request_code, { email: this.email });
+                this.step = 'verification';
+            } catch (e) { this.error = e.message; } finally { this.loading = false; }
+        },
+
+        async verifyCode() {
+            this.error = ''; this.loading = true;
+            try {
+                const res = await this.post(this.routes.sign_in, { email: this.email, code: this.code });
+                this.sessionToken = res.session_token;
+                this.step = 'region';
+                await this.fetchRegions();
+            } catch (e) { this.error = e.message; } finally { this.loading = false; }
+        },
+
+        async fetchRegions() {
+            this.loadingRegions = true;
+            try {
+                const res = await this.post(this.routes.regions, { session_token: this.sessionToken });
+                this.regions = res.regions || [];
+            } catch (e) { this.error = e.message; } finally { this.loadingRegions = false; }
+        },
+
+        async connectRegion() {
+            this.error = ''; this.loading = true;
+            try {
+                const res = await this.post(this.routes.upgrade, {
+                    session_token: this.sessionToken, region_id: this.selectedRegion,
+                });
+                const cred = this.regions.find(r => r.id === this.selectedRegion);
+                this.region = res.region || (cred ? (cred.name ?? cred.id) : this.selectedRegion);
+                this.step = 'connected';
+            } catch (e) { this.error = e.message; } finally { this.loading = false; }
+        },
+
+        async disconnect() {
+            this.error = ''; this.loading = true;
+            try {
+                await this.post(this.routes.disconnect, {});
+                this.region = null;
+                this.step = 'start';
+            } catch (e) { this.error = e.message; } finally { this.loading = false; }
+        },
+
+        async get(url) {
+            const resp = await fetch(url, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            return this.parseResponse(resp);
+        },
+
+        async post(url, body) {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(body),
+            });
+            return this.parseResponse(resp);
+        },
+
+        async parseResponse(resp) {
+            const data = await resp.json().catch(() => ({}));
+            if (! resp.ok) {
+                throw new Error(data.error ?? data.message ?? `Request failed (${resp.status})`);
+            }
+            return data;
+        },
+    };
+}
+</script>

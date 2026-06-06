@@ -943,6 +943,7 @@ requires-dist = [
     { name = "psutil", specifier = ">=5.9" },
     { name = "pyicu", marker = "extra == 'icu'", specifier = ">=2.12" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-playwright", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "regex", specifier = ">=2024.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "selectolax", specifier = ">=0.3" },
