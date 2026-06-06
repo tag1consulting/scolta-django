@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# scolta-django depends on the `scolta` binding via a path source
+# ([tool.uv.sources] scolta = { path = "../scolta-python" }). In CI we therefore
+# check out BOTH repos as siblings so that relative path resolves:
+#
+#     <workspace>/scolta-django   (this repo)
+#     <workspace>/scolta-python   (the binding)
+#
+# The scolta-python checkout assumes it lives under the same owner as this repo.
+# Override the owner/ref via the SCOLTA_PYTHON_REF env if it ever moves, and set
+# a CI_PAT secret if either repo is private (the default GITHUB_TOKEN cannot read
+# a second repository).
+env:
+  SCOLTA_PYTHON_REPO: ${{ github.repository_owner }}/scolta-python
+  SCOLTA_PYTHON_REF: main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - name: Check out scolta-django
+        uses: actions/checkout@v4
+        with:
+          path: scolta-django
+
+      - name: Check out scolta-python (sibling, for the path dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SCOLTA_PYTHON_REPO }}
+          ref: ${{ env.SCOLTA_PYTHON_REF }}
+          path: scolta-python
+          token: ${{ secrets.CI_PAT || github.token }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        working-directory: scolta-django
+        run: uv sync --extra dev --python ${{ matrix.python-version }}
+
+      - name: Lint (ruff)
+        working-directory: scolta-django
+        run: uv run ruff check src tests
+
+      - name: Test (pytest)
+        working-directory: scolta-django
+        run: uv run pytest -q
