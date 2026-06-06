@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scolta Django Demo — Search</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 3rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; }
+    .hint { color: #666; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  {% load scolta %}
+  <h1>Scolta Django Demo</h1>
+  <p class="hint">Try: <em>chocolate dessert</em>, <em>crispy vegetables</em>, <em>tangy bread</em>.</p>
+  {% scolta_search %}
+</body>
+</html>

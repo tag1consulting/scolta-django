@@ -15,13 +15,10 @@ from .models import ACTION_DELETE, ACTION_INDEX, ScoltaTracker
 def get_content_source() -> DjangoContentSource:
     """Return the active content source — WagtailContentSource when Wagtail is
     enabled (``SCOLTA['wagtail']`` truthy) and installed, else the ORM source."""
-    if conf.get("wagtail"):
-        try:
-            from .wagtail import WagtailContentSource
+    if conf.get("wagtail") and apps.is_installed("wagtail"):
+        from .wagtail import WagtailContentSource
 
-            return WagtailContentSource()
-        except ImportError:
-            pass
+        return WagtailContentSource()
     return DjangoContentSource()
 
 

@@ -28,3 +28,18 @@ Initial Django adapter for the `scolta` Python binding.
 - `content_source.get_content_source()` factory selects the Wagtail source when
   `SCOLTA['wagtail']` is enabled; the build command + rebuild task use it.
 - Wagtail is an optional `[wagtail]` extra. +9 tests; 31 total, ruff clean.
+
+## Phase 11 — end-to-end demo + verification
+
+- `example/` — a runnable Django demo: a Searchable `blog.Post` model, a
+  `seed_demo` command, a search page using `{% scolta_search %}`, and URL wiring
+  that serves the built Pagefind index (`/pagefind/`) and the vendored WASM/JS/CSS
+  assets (`/scolta-assets/`).
+- Fixed the Wagtail gate to use `apps.is_installed("wagtail")` (importing
+  wagtail.models requires the app to be installed, not merely importable), so
+  the adapter works in plain-Django projects that have Wagtail in the venv.
+- Verified end-to-end (headless): migrate → seed → `scolta_build` (6-page index)
+  → search page renders with `window.scolta` + pagefindPath; the index,
+  `pagefind-entry.json`, `scolta.js`, and `scolta_core_bg.wasm` are served;
+  AI endpoints respond (graceful no-key); editing a post auto-rebuilds the index
+  and the new content appears in a fragment.
