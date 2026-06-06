@@ -43,3 +43,17 @@ Initial Django adapter for the `scolta` Python binding.
   `pagefind-entry.json`, `scolta.js`, and `scolta_core_bg.wasm` are served;
   AI endpoints respond (graceful no-key); editing a post auto-rebuilds the index
   and the new content appears in a fragment.
+
+## Amazee.ai integration
+
+- `amazee.py` — `DjangoConfigStorage` (model-backed singleton credentials),
+  `config_overrides()` (Amazee creds → OpenAI-compatible config when no explicit
+  key), `maybe_auto_provision()` (first-request trial provisioning when
+  `ai_provider="amazee"`).
+- `ScoltaAmazeeConfig` model + migration; `scolta_amazee_provision` management
+  command (`--email`, `--force`).
+- `conf.scolta_config()` layers Amazee overrides on top of settings (explicit
+  key always wins); `DjangoAiService` converts budget-exhausted errors to
+  `AmazeeBudgetExceededException`; AI views auto-provision when configured.
+- 11 new tests (storage, overrides, command, auto-provision, budget hook);
+  42 total, ruff clean.

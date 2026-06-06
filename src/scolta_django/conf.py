@@ -33,8 +33,18 @@ def get(key, default=None):
 
 
 def scolta_config() -> ScoltaConfig:
-    """Build a ScoltaConfig from the SCOLTA settings dict (unknown keys ignored)."""
-    return ScoltaConfig.from_dict(_settings())
+    """Build a ScoltaConfig from the SCOLTA settings dict (unknown keys ignored).
+
+    Amazee.ai credentials (when stored and no explicit key is set) are layered
+    on top to point the OpenAI-compatible client at the LiteLLM endpoint."""
+    data = dict(_settings())
+    try:
+        from .amazee import config_overrides
+
+        data.update(config_overrides(data))
+    except Exception:  # noqa: BLE001 - Amazee optional / table may be absent
+        pass
+    return ScoltaConfig.from_dict(data)
 
 
 def state_dir() -> str:

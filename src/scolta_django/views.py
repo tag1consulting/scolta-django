@@ -22,6 +22,8 @@ from .cache import DjangoCacheDriver
 
 
 def _make_handler() -> AiEndpointHandler:
+    from .amazee import maybe_auto_provision
+    maybe_auto_provision()
     config = conf.scolta_config()
     ai = DjangoAiService(config)
     cache = DjangoCacheDriver() if config.cache_ttl > 0 else NullCacheDriver()

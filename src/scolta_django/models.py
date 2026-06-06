@@ -49,3 +49,17 @@ class ScoltaTracker(models.Model):
     def clear_all(cls) -> int:
         deleted, _ = cls.objects.all().delete()
         return deleted
+
+
+class ScoltaAmazeeConfig(models.Model):
+    """Singleton row (pk=1) holding provisioned Amazee.ai credentials."""
+
+    litellm_token = models.TextField(default="")
+    litellm_api_url = models.TextField(default="")
+    region = models.CharField(max_length=128, default="")
+    ai_model = models.CharField(max_length=128, default="")
+    ai_expansion_model = models.CharField(max_length=128, default="")
+
+    class Meta:
+        db_table = "scolta_amazee_config"
+        app_label = "scolta_django"
