@@ -39,6 +39,29 @@ def test_page_to_content_item():
 
 
 @pytest.mark.django_db
+def test_mixin_derives_language_from_wagtail_locale():
+    """SearchableMixin default derives the per-page filter language from a
+    Wagtail locale. Regression for the all-`en` index bug (every page indexed
+    as the ContentItem default, collapsing the language filter to one bucket)."""
+    from wagtail.models import Locale
+
+    de, _ = Locale.objects.get_or_create(language_code="de")
+    post = Post.objects.create(title="Artikel", body="Inhalt")
+    post.locale = de  # multilingual pages carry a locale; the mixin reads it
+    item = post.to_searchable_content()
+    assert item.language == "de"
+
+
+@pytest.mark.django_db
+def test_mixin_default_language_without_locale():
+    """A plain Django model without `.locale` keeps the ContentItem default."""
+    post = Post.objects.create(title="Plain", body="body")
+    assert getattr(post, "locale", None) is None
+    item = post.to_searchable_content()
+    assert item.language == "en"  # ContentItem default
+
+
+@pytest.mark.django_db
 def test_live_pages_excludes_root():
     page = _make_page()
     pks = {p.pk for p in scolta_wagtail.live_pages()}

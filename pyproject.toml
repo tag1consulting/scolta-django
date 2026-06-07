@@ -23,6 +23,7 @@ wagtail = ["wagtail>=5.2"]
 dev = [
     "pytest>=8.0",
     "pytest-django>=4.8",
+    "pytest-playwright>=0.5",  # search-bar browser regression (run: playwright install chromium)
     "ruff>=0.5",
     "wagtail>=5.2",
 ]

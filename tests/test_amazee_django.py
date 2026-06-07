@@ -102,9 +102,15 @@ def test_provision_command_skips_when_present(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_maybe_auto_provision_noop_when_not_amazee(settings):
-    settings.SCOLTA = {**settings.SCOLTA, "ai_provider": "anthropic"}
-    assert maybe_auto_provision(client=FakeAmazeeClient()) is False
+def test_maybe_auto_provision_provisions_for_default_provider_no_key(settings):
+    """Contract (a): the trigger is "no key configured", NOT "provider==amazee".
+    The default provider is 'anthropic'; with no key and empty storage the free
+    Amazee trial must still provision (mirrors the PHP getApiKeySource()=='none'
+    contract). Regression for the dead provider gate."""
+    settings.SCOLTA = {**settings.SCOLTA, "ai_provider": "anthropic", "ai_api_key": ""}
+    assert DjangoConfigStorage().load() is None  # empty storage
+    assert maybe_auto_provision(client=FakeAmazeeClient()) is True
+    assert DjangoConfigStorage().load()["litellm_token"] == "tok-123"
 
 
 @pytest.mark.django_db
@@ -116,8 +122,19 @@ def test_maybe_auto_provision_provisions_for_amazee(settings):
 
 @pytest.mark.django_db
 def test_maybe_auto_provision_skips_with_explicit_key(settings):
-    settings.SCOLTA = {**settings.SCOLTA, "ai_provider": "amazee", "ai_api_key": "sk-mine"}
+    """Contract (b): an explicit key always wins — no provisioning."""
+    settings.SCOLTA = {**settings.SCOLTA, "ai_provider": "anthropic", "ai_api_key": "sk-mine"}
     assert maybe_auto_provision(client=FakeAmazeeClient()) is False
+    assert DjangoConfigStorage().load() is None
+
+
+@pytest.mark.django_db
+def test_maybe_auto_provision_noop_when_creds_already_stored(settings):
+    """Contract (c): credentials already stored -> idempotent no-op."""
+    settings.SCOLTA = {**settings.SCOLTA, "ai_provider": "anthropic", "ai_api_key": ""}
+    DjangoConfigStorage().store("existing-tok", "https://llm.example", "us")
+    assert maybe_auto_provision(client=FakeAmazeeClient()) is False
+    assert DjangoConfigStorage().load()["litellm_token"] == "existing-tok"
 
 
 # -- budget hook --------------------------------------------------------------

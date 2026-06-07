@@ -58,6 +58,10 @@ jobs:
         working-directory: scolta-django
         run: uv run ruff check src tests
 
+      - name: Install Playwright chromium (search-bar browser regression test)
+        working-directory: scolta-django
+        run: uv run playwright install --with-deps chromium
+
       - name: Test (pytest)
         working-directory: scolta-django
         run: uv run pytest -q

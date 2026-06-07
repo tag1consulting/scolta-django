@@ -29,6 +29,11 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"
 
 ROOT_URLCONF = "tests.urls"
 
+# Django leaves STATIC_URL unset (None) by default; the live-server test helper
+# does urlparse(STATIC_URL).path, which yields bytes for None and breaks request
+# routing in the browser regression test. A plain string keeps it str.
+STATIC_URL = "/static/"
+
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
     "DIRS": [],

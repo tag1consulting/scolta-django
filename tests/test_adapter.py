@@ -211,6 +211,42 @@ def test_search_template_tag_renders():
     assert "Test Site" in out  # site name from browser config
 
 
+def _rendered_browser_config(template="{% load scolta %}{% scolta_search %}"):
+    """Parse the window.scolta = {...}; object out of the rendered tag."""
+    import re
+
+    from django.template import Context, Template
+
+    out = Template(template).render(Context({}))
+    match = re.search(r"window\.scolta = (\{.*?\});", out, re.S)
+    assert match, "tag must emit a window.scolta config object"
+    return json.loads(match.group(1)), out
+
+
+def test_search_tag_config_has_container_matching_div():
+    """scolta.js auto-init mounts into window.scolta.container; if the key is
+    missing the search box never renders even though the markup is present.
+    Regression for the empty-header bug (config emitted without `container`)."""
+    config, out = _rendered_browser_config()
+    assert config["container"] == "#scolta-search"
+    assert 'id="scolta-search"' in out  # selector must match the rendered div
+
+
+def test_search_tag_container_id_is_overridable():
+    config, out = _rendered_browser_config(
+        '{% load scolta %}{% scolta_search container_id="custom-box" %}'
+    )
+    assert config["container"] == "#custom-box"
+    assert 'id="custom-box"' in out
+
+
+def test_search_tag_wasm_path_points_at_glue_module():
+    """scolta.js does import(wasmPath), so it must be the full .js module path,
+    not the containing directory. Regression for the wasmPath-as-directory bug."""
+    config, _ = _rendered_browser_config()
+    assert config["wasmPath"].endswith("/wasm/scolta_core.js")
+
+
 def test_config_json_tag():
     from django.template import Context, Template
 

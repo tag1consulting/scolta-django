@@ -74,9 +74,15 @@ def config_overrides(settings_dict: dict) -> dict:
 
 
 def maybe_auto_provision(client=None) -> bool:
-    """Auto-provision a free Amazee trial on first use when provider == 'amazee'
-    and nothing is configured yet. No-op otherwise. Returns True if provisioned."""
-    if conf.get("ai_provider") != "amazee":
+    """Auto-provision a free Amazee trial on first use when NO API key is
+    configured — regardless of the ``ai_provider`` setting. This mirrors the PHP
+    adapters (e.g. ScoltaAiService::createClient lazy-provisions whenever
+    getApiKeySource() === 'none'): a site with no key gets the free Amazee trial
+    automatically, while an explicit key always wins. Returns True if a trial was
+    provisioned on this call. No-op (returns False) when an explicit key exists;
+    ``ensure_ai_available`` handles the already-provisioned and failure cases
+    (graceful degrade)."""
+    if conf.get("ai_api_key"):
         return False
     storage = DjangoConfigStorage()
 

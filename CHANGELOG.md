@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+Search-bar parity fixes (Django/Wagtail demo brought in line with the PHP
+adapters).
+
+- `{% scolta_search %}` now emits a `container` selector in `window.scolta`
+  (matching the rendered mount div) — `scolta.js` auto-init reads it to find its
+  mount point; without it the markup rendered but the search box never did.
+- `{% scolta_search %}` now sets `wasmPath` to the full WASM glue module
+  (`…/wasm/scolta_core.js`), not the containing directory: `scolta.js` does
+  `import(wasmPath)` directly, so a directory path 404s.
+- Amazee auto-provisioning now triggers on a **key gate** rather than a provider
+  gate: a free Amazee trial is provisioned whenever no API key is configured,
+  regardless of `ai_provider` (mirrors the PHP `getApiKeySource() === 'none'`
+  contract). An explicit key always wins. Previously the trigger required
+  `ai_provider == 'amazee'`, so the default `anthropic` provider never
+  provisioned and AI silently degraded.
+- `SearchableMixin.to_searchable_content()` derives the per-page filter
+  `language` from a Wagtail locale (`self.locale.language_code`) when present, so
+  multilingual sites populate the `language` facet per page instead of
+  collapsing every page into the default bucket. Plain Django models without a
+  locale keep the `ContentItem` default; explicit overrides must pass
+  `language=` themselves.
+- Tests: browser-layer search-bar mount regression (`test_search_browser.py`,
+  Playwright, skips when chromium is absent) plus `container`/`wasmPath` config
+  guards; Amazee key-gate trigger contract (default provider + no key
+  provisions, explicit key no-ops, already-stored creds no-op); Wagtail-locale
+  language derivation. CI installs chromium for the browser test.
+
 Initial Django adapter for the `scolta` Python binding.
 
 - `SearchableMixin` + settings-driven model registry; `ScoltaTracker` change

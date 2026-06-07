@@ -4,6 +4,13 @@ Add ``SearchableMixin`` to a model and list it in ``SCOLTA['models']``. Provide
 ``to_searchable_content()`` for precise control; a sensible default reads common
 field names. WARNING: the default treats the body field as PLAIN TEXT (it wraps
 and escapes it); override the method if your content is HTML.
+
+The default derives the per-page filter ``language`` from a Wagtail ``locale``
+(``self.locale.language_code``) when present; plain Django models without a
+locale keep the ``ContentItem`` default. NOTE: if you override
+``to_searchable_content()`` on a multilingual site, you must pass ``language=``
+yourself — otherwise every page indexes as the default language and the language
+filter collapses to a single bucket.
 """
 
 from __future__ import annotations
@@ -43,14 +50,24 @@ class SearchableMixin:
         )
         date = date_value.strftime("%Y-%m-%d") if date_value else ""
 
-        return ContentItem(
-            id=f"{table}-{pk}",
-            title=str(title),
-            body_html=body_html,
-            url=url,
-            date=date,
-            site_name=conf.site_name(),
-        )
+        # Multilingual (Wagtail) pages carry a locale; use it as the per-page
+        # filter language so the `language` facet is populated per page rather
+        # than collapsing to the ContentItem default. Plain models have no
+        # locale and keep the default.
+        locale = getattr(self, "locale", None)
+        language = getattr(locale, "language_code", "") or ""
+
+        kwargs = {
+            "id": f"{table}-{pk}",
+            "title": str(title),
+            "body_html": body_html,
+            "url": url,
+            "date": date,
+            "site_name": conf.site_name(),
+        }
+        if language:
+            kwargs["language"] = language
+        return ContentItem(**kwargs)
 
     @classmethod
     def searchable_queryset(cls):
