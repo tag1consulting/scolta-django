@@ -230,6 +230,55 @@ def test_search_template_tag_appends_cache_bust():
     assert js.group(1), "scolta.js ?v= param is empty"
 
 
+def _extract_window_scolta(rendered: str) -> dict:
+    """Pull the `window.scolta = {...};` object out of rendered tag output."""
+    import re
+
+    m = re.search(r"window\.scolta\s*=\s*(\{.*?\});", rendered, re.DOTALL)
+    assert m is not None, f"window.scolta assignment not found in: {rendered!r}"
+    return json.loads(m.group(1))
+
+
+def test_search_tag_emits_container_and_wasm_glue_path():
+    """Regression: the browser config must name a mount point and the full
+    WASM glue module, or scolta.js silently never mounts the widget.
+
+    scolta.js auto-init bails unless ``window.scolta.container`` is set, and it
+    loads WASM via ``import(wasmPath)`` where ``wasmPath`` must be the glue
+    module (``…/wasm/scolta_core.js``), not the directory. The Django adapter
+    previously emitted neither correctly — it omitted ``container`` entirely and
+    pointed ``wasmPath`` at the ``…/wasm/`` directory — so the widget never
+    initialized (no box, no results, no facets, no console error). This asserts
+    parity with the WP/Laravel adapters, which both emit these correctly.
+    """
+    import re
+
+    from django.template import Context, Template
+
+    out = Template("{% load scolta %}{% scolta_search %}").render(Context({}))
+    config = _extract_window_scolta(out)
+
+    assert config["container"] == "#scolta-search"
+    assert config["wasmPath"].endswith("/wasm/scolta_core.js")
+
+    # The container selector and the rendered div id must not drift apart.
+    div = re.search(r'<div id="([^"]+)"', out)
+    assert div is not None, f"search container div not found in: {out!r}"
+    assert config["container"] == f"#{div.group(1)}"
+
+
+def test_search_tag_container_tracks_custom_id():
+    """A custom container_id flows into both the div and the config selector."""
+    from django.template import Context, Template
+
+    out = Template(
+        '{% load scolta %}{% scolta_search "my-search" %}'
+    ).render(Context({}))
+    config = _extract_window_scolta(out)
+    assert config["container"] == "#my-search"
+    assert 'id="my-search"' in out
+
+
 def test_config_json_tag():
     from django.template import Context, Template
 

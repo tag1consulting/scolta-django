@@ -54,7 +54,15 @@ def scolta_search(container_id: str = "scolta-search") -> str:
     """Render the search container, window.scolta config, and asset tags."""
     asset_url = str(conf.get("asset_url", "/static/scolta/")).rstrip("/")
     browser_config = conf.scolta_config().to_browser_config()
-    browser_config.setdefault("wasmPath", f"{asset_url}/wasm/")
+    # scolta.js auto-init bails unless window.scolta.container names the mount
+    # point, and it loads WASM via `import(wasmPath)` where wasmPath must be the
+    # full glue-module path (…/wasm/scolta_core.js), not the directory. Mirror
+    # the WP/Laravel adapters so the browser widget actually mounts.
+    browser_config.setdefault("container", f"#{container_id}")
+    # to_browser_config() emits wasmPath as an empty string, so setdefault would
+    # never fill it — treat empty as unset while still honoring an explicit value.
+    if not browser_config.get("wasmPath"):
+        browser_config["wasmPath"] = f"{asset_url}/wasm/scolta_core.js"
     config_json = json.dumps(browser_config)
     css_version = _asset_version("css/scolta.css")
     js_version = _asset_version("js/scolta.js")

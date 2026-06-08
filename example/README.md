@@ -19,6 +19,28 @@ uv run python manage.py runserver
 Open http://127.0.0.1:8000/search/ and search (try "chocolate dessert",
 "crispy vegetables", "tangy bread").
 
+## Pre-release: verify the widget actually mounts
+
+The unit tests assert the emitted `window.scolta` config carries `container` and
+a full-glue `wasmPath` (`tests/test_adapter.py`), but CI has no browser, so it
+cannot prove `scolta.js` mounts the widget. Before tagging a release, confirm
+the live mount against this demo (this is what catches a regression where the
+config renders but the box never appears):
+
+```sh
+uv run python manage.py runserver
+# then, against http://127.0.0.1:8000/search/ :
+#   - the search input element exists in the DOM (the widget mounted), and
+#   - typing a query returns results with facets,
+#   - with no console errors.
+```
+
+A headless equivalent (used in the demo CI checks): load `/search/` in a
+headless browser and assert `document.querySelector('#scolta-search input')`
+is non-null after load — a present `#scolta-search` div with no input inside
+means auto-init bailed (missing `container`) or the WASM glue 404'd (wrong
+`wasmPath`).
+
 ## AI summaries (optional)
 
 Without an API key, search still works and the AI endpoints degrade gracefully

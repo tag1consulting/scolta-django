@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Fixed
+- **`{% scolta_search %}` now emits `container` and a full WASM glue-module
+  `wasmPath`, so the browser search widget actually mounts.** Root cause: the
+  template tag omitted the `container` key entirely and left `wasmPath` at the
+  empty string `to_browser_config()` returns (the old `setdefault` could never
+  fill an already-present key). `scolta.js` auto-init bails unless
+  `window.scolta.container` names a mount point, and it loads WASM via
+  `import(wasmPath)` against the glue module (`…/wasm/scolta_core.js`) — so the
+  widget silently never initialized (no box, no results, no facets, no console
+  error). The tag now emits `container: "#<id>"` and
+  `wasmPath: …/wasm/scolta_core.js`, restoring parity with the WordPress and
+  Laravel adapters. Added a regression test asserting both are present and that
+  the `container` selector matches the rendered container `<div>` id.
 - **`{% scolta_search %}` asset tags now carry a cache-bust query param.**
   Drupal auto-appends `?v=<core version>` to library assets and WordPress
   appends `?ver=<filemtime>`, but the Django adapter served
