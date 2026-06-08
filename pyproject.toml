@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scolta-django"
-version = "1.0.4.dev0"
+version = "1.0.0"
 description = "Scolta AI Search for Django — zero-infrastructure AI search with Pagefind"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ keywords = ["django", "search", "pagefind", "ai", "scolta", "wagtail"]
 
 dependencies = [
     "Django>=4.2",
-    "scolta",
+    "scolta>=1.0.0",
 ]
 
 [project.optional-dependencies]

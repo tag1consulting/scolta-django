@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-08
+
 ### Fixed
 - **`{% scolta_search %}` now emits `container` and a full WASM glue-module
   `wasmPath`, so the browser search widget actually mounts.** Root cause: the
