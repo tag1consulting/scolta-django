@@ -211,6 +211,25 @@ def test_search_template_tag_renders():
     assert "Test Site" in out  # site name from browser config
 
 
+def test_search_template_tag_appends_cache_bust():
+    """Both asset tags carry a non-empty ?v= cache-bust param.
+
+    Drupal/WP append a version to library assets; the Django adapter must too,
+    or a changed asset can be served stale from HTTP cache.
+    """
+    import re
+
+    from django.template import Context, Template
+
+    out = Template("{% load scolta %}{% scolta_search %}").render(Context({}))
+    css = re.search(r'href="[^"]*scolta\.css\?v=([^"&]+)"', out)
+    js = re.search(r'src="[^"]*scolta\.js\?v=([^"&]+)"', out)
+    assert css is not None, f"scolta.css link missing a ?v= param: {out!r}"
+    assert js is not None, f"scolta.js script missing a ?v= param: {out!r}"
+    assert css.group(1), "scolta.css ?v= param is empty"
+    assert js.group(1), "scolta.js ?v= param is empty"
+
+
 def test_config_json_tag():
     from django.template import Context, Template
 

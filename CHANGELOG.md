@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`{% scolta_search %}` asset tags now carry a cache-bust query param.**
+  Drupal auto-appends `?v=<core version>` to library assets and WordPress
+  appends `?ver=<filemtime>`, but the Django adapter served
+  `…/css/scolta.css` and `…/js/scolta.js` with no version param — so a changed
+  asset could be served stale from HTTP cache. Both tags now carry `?v=<token>`
+  where the token is the served asset file's mtime (content-derived, so a dev
+  rebuild busts the cache — matching WP's `filemtime` rationale), falling back
+  to the `scolta` package version when the file cannot be stat'd.
+
 Initial Django adapter for the `scolta` Python binding.
 
 - `SearchableMixin` + settings-driven model registry; `ScoltaTracker` change
