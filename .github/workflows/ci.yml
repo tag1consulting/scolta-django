@@ -33,12 +33,12 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - name: Check out scolta-django
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: scolta-django
 
       - name: Check out scolta-python (sibling, for the path dependency)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.SCOLTA_PYTHON_REPO }}
           ref: ${{ env.SCOLTA_PYTHON_REF }}
