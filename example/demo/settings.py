@@ -21,12 +21,14 @@ ROOT_URLCONF = "demo.urls"
 
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
-TEMPLATES = [{
-    "BACKEND": "django.template.backends.django.DjangoTemplates",
-    "DIRS": [BASE_DIR / "templates"],
-    "APP_DIRS": True,
-    "OPTIONS": {},
-}]
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {},
+    }
+]
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
@@ -40,13 +42,13 @@ SCOLTA = {
     "ai_provider": os.environ.get("SCOLTA_AI_PROVIDER", "anthropic"),
     "site_name": "Scolta Django Demo",
     "site_description": "a demo blog",
-    "indexer": "auto",                       # pure-Python indexer
+    "indexer": "auto",  # pure-Python indexer
     "models": ["blog.Post"],
     "output_dir": str(BASE_DIR / "pagefind_index"),
     "state_dir": str(BASE_DIR / ".scolta-state"),
-    "pagefind_index_path": "/pagefind",      # browser loads /pagefind/pagefind.js
-    "asset_url": "/scolta-assets",           # browser loads /scolta-assets/js/scolta.js
+    "pagefind_index_path": "/pagefind",  # browser loads /pagefind/pagefind.js
+    "asset_url": "/scolta-assets",  # browser loads /scolta-assets/js/scolta.js
     "auto_rebuild": True,
-    "auto_rebuild_delay": 5,                  # short window for demoing edit->rebuild
+    "auto_rebuild_delay": 5,  # short window for demoing edit->rebuild
     "route_prefix": "api/scolta/v1",
 }

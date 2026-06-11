@@ -10,7 +10,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ScoltaTracker",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
                 ("content_id", models.CharField(max_length=255)),
                 ("content_type", models.CharField(max_length=255)),
                 ("action", models.CharField(default="index", max_length=16)),

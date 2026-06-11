@@ -19,7 +19,11 @@ class DjangoConfigStorage(ConfigStorage):
     def store(self, litellm_token: str, litellm_api_url: str, region: str) -> None:
         ScoltaAmazeeConfig.objects.update_or_create(
             pk=1,
-            defaults={"litellm_token": litellm_token, "litellm_api_url": litellm_api_url, "region": region},
+            defaults={
+                "litellm_token": litellm_token,
+                "litellm_api_url": litellm_api_url,
+                "region": region,
+            },
         )
 
     def load(self) -> dict | None:
@@ -60,7 +64,7 @@ def config_overrides(settings_dict: dict) -> dict:
     try:
         storage = DjangoConfigStorage()
         creds = storage.load()
-    except Exception:  # noqa: BLE001 - table may not exist yet
+    except Exception:
         return {}
     if not creds:
         return {}

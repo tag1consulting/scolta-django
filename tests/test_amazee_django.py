@@ -30,7 +30,10 @@ def test_config_storage_round_trip():
     s.store("tok", "https://llm.x", "us")
     assert s.load() == {"litellm_token": "tok", "litellm_api_url": "https://llm.x", "region": "us"}
     s.store_models("claude-sonnet-4-6", "claude-haiku-4-5")
-    assert s.stored_models() == {"ai_model": "claude-sonnet-4-6", "ai_expansion_model": "claude-haiku-4-5"}
+    assert s.stored_models() == {
+        "ai_model": "claude-sonnet-4-6",
+        "ai_expansion_model": "claude-haiku-4-5",
+    }
     s.clear()
     assert s.load() is None
     assert ScoltaAmazeeConfig.objects.count() == 0
