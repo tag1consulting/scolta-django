@@ -34,7 +34,12 @@ class SearchableMixin:
 
         pk = self.pk
         table = self._meta.db_table
-        url = f"/{table}/{pk}"
+        # Prefer the model's canonical URL; the table-name path is a last
+        # resort and almost never a real route.
+        if hasattr(self, "get_absolute_url"):
+            url = str(self.get_absolute_url())
+        else:
+            url = f"/{table}/{pk}"
 
         date_value = (
             getattr(self, "updated_at", None)

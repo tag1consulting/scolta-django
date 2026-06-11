@@ -38,12 +38,11 @@ def scolta_config() -> ScoltaConfig:
     Amazee.ai credentials (when stored and no explicit key is set) are layered
     on top to point the OpenAI-compatible client at the LiteLLM endpoint."""
     data = dict(_settings())
-    try:
-        from .amazee import config_overrides
+    from .amazee import config_overrides
 
-        data.update(config_overrides(data))
-    except Exception:  # noqa: BLE001 - Amazee optional / table may be absent
-        pass
+    # config_overrides() itself guards the expected missing-table case and
+    # returns {} — no blanket except here, so real bugs surface.
+    data.update(config_overrides(data))
     return ScoltaConfig.from_dict(data)
 
 
@@ -69,15 +68,23 @@ def model_labels() -> list[str]:
 
 
 def models() -> list:
-    """Resolve configured models to Django model classes."""
+    """Resolve configured models to Django model classes.
+
+    A label that doesn't resolve raises ImproperlyConfigured: silently
+    skipping it (the old behaviour) meant a typo in SCOLTA["models"] left
+    that content unindexed with no signal anywhere. apps.ready() calls this,
+    so a bad label fails at startup."""
     from django.apps import apps
+    from django.core.exceptions import ImproperlyConfigured
 
     resolved = []
     for label in model_labels():
         try:
             resolved.append(apps.get_model(label))
-        except (LookupError, ValueError):
-            continue
+        except (LookupError, ValueError) as exc:
+            raise ImproperlyConfigured(
+                f"SCOLTA['models'] entry {label!r} does not resolve to an installed model: {exc}"
+            ) from exc
     return resolved
 
 

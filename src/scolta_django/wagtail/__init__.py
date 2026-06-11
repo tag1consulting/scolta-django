@@ -43,7 +43,7 @@ def page_to_content_item(page) -> ContentItem | None:
     if hasattr(specific, "get_searchable_content"):
         try:
             body_parts = [str(x) for x in specific.get_searchable_content() if x]
-        except Exception:  # noqa: BLE001 - never let one page break the build
+        except Exception:
             body_parts = []
     # Fall back to the title so a contentless page (e.g. a section index page)
     # still has body text and is not dropped by the indexer's min-length filter.
@@ -82,7 +82,10 @@ class WagtailContentSource(DjangoContentSource):
                 yield item
 
     def get_total_count(self, options: dict | None = None) -> int:
-        return super().get_total_count(options) + Page.objects.live().public().filter(depth__gt=1).count()
+        return (
+            super().get_total_count(options)
+            + Page.objects.live().public().filter(depth__gt=1).count()
+        )
 
 
 def _on_published(sender, instance, **kwargs) -> None:

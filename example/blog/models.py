@@ -25,7 +25,7 @@ class Post(SearchableMixin, models.Model):
         return ContentItem(
             id=f"post-{self.pk}",
             title=self.title,
-            body_html=self.body,           # real HTML, cleaned by the indexer
+            body_html=self.body,  # real HTML, cleaned by the indexer
             url=self.get_absolute_url(),
             date=self.updated_at.strftime("%Y-%m-%d"),
             site_name="Scolta Django Demo",

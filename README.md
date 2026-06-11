@@ -48,12 +48,35 @@ class Post(SearchableMixin, models.Model):
 Build the index and render the widget:
 
 ```sh
-python manage.py scolta_build          # --force --incremental --resume --restart --sync
+python manage.py scolta_build          # --force --incremental --resume --restart
 ```
 
 ```django
 {% load scolta %}{% scolta_search %}
 ```
+
+## Static assets
+
+The browser runtime (scolta.js/css, the WASM scoring engine, the Pagefind
+runtime) is vendored inside the `scolta` package, where no default
+staticfiles finder looks. Add the bundled finder so `collectstatic` (and the
+dev server) serve it at the default `asset_url` (`/static/scolta/`):
+
+```python
+STATICFILES_FINDERS = [
+    "django.contrib.staticfiles.finders.FileSystemFinder",
+    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+    "scolta_django.staticfiles.ScoltaAssetFinder",
+]
+```
+
+Settings:
+
+- `SCOLTA["asset_url"]` (default `/static/scolta/`) — base URL the
+  `{% scolta_search %}` tag uses for the CSS/JS/WASM tags. Point it elsewhere
+  if you serve the bundle from a CDN or copy it yourself.
+- `SCOLTA["amazee_access"]` (optional) — callable `(request) -> bool` gating
+  the Amazee.ai settings page and JSON endpoints. Default: active staff user.
 
 ## Health endpoint
 
@@ -67,6 +90,10 @@ break uptime monitors.
 
 If Wagtail is installed, the optional `scolta_django.wagtail` module is loaded
 automatically (StreamField extraction, page-tree enumeration, admin panel).
+Indexing Wagtail pages is opt-in: set `SCOLTA["wagtail"] = True` to use the
+Wagtail content source, which indexes live public pages alongside the
+configured models. With the flag unset, only `SCOLTA["models"]` are indexed
+(the admin panel and signal wiring load either way).
 
 ## Development
 

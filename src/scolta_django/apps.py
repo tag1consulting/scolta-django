@@ -5,7 +5,9 @@ from __future__ import annotations
 from django.apps import AppConfig
 
 
-class ScoltaConfig(AppConfig):
+class ScoltaDjangoConfig(AppConfig):
+    """Named to avoid shadowing/confusion with ``scolta.config.ScoltaConfig``."""
+
     name = "scolta_django"
     verbose_name = "Scolta AI Search"
     default_auto_field = "django.db.models.BigAutoField"
