@@ -163,12 +163,42 @@ def test_followup_no_api_key():
     assert body["remaining"] == 0
 
 
-def test_health_endpoint():
+def test_health_endpoint_anonymous_is_status_only():
+    # Monitors keep working (HTTP 200), but anonymous callers get exactly the
+    # status — the diagnostic detail requires staff.
     resp = Client().get("/api/scolta/v1/health")
     assert resp.status_code == 200
     body = resp.json()
+    assert set(body) == {"status"}
+    assert body["status"] in ("ok", "degraded")
+
+
+@pytest.mark.django_db
+def test_health_endpoint_staff_gets_full_detail():
+    from django.contrib.auth.models import User
+    from django.test import RequestFactory
+
+    from scolta_django import views
+
+    request = RequestFactory().get("/api/scolta/v1/health")
+    request.user = User.objects.create_user("ops", password="x", is_staff=True)
+    body = json.loads(views.health(request).content)
     assert "status" in body
     assert "index_exists" in body
+    assert "ai_provider" in body
+
+
+@pytest.mark.django_db
+def test_health_endpoint_non_staff_user_is_status_only():
+    from django.contrib.auth.models import User
+    from django.test import RequestFactory
+
+    from scolta_django import views
+
+    request = RequestFactory().get("/api/scolta/v1/health")
+    request.user = User.objects.create_user("reader", password="x")
+    body = json.loads(views.health(request).content)
+    assert set(body) == {"status"}
 
 
 def test_invalid_json_is_400():
