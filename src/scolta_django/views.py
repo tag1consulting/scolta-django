@@ -90,5 +90,17 @@ def follow_up(request) -> JsonResponse:
 
 @require_GET
 def health(request) -> JsonResponse:
+    """Health check: status-only for anonymous callers, full detail for staff.
+
+    Uptime monitors always get HTTP 200 with {"status": ...}; the full
+    diagnostic payload (provider, configured flags, index state) requires an
+    active staff user — the same bar as staff_member_required, without the
+    login redirect that would break monitoring tools. The full report is
+    always computed first so the trimmed status still reflects degradation.
+    """
     checker = HealthChecker(conf.scolta_config(), conf.output_dir(), None, None)
-    return JsonResponse(checker.check())
+    report = checker.check()
+    user = getattr(request, "user", None)
+    if user is not None and user.is_active and user.is_staff:
+        return JsonResponse(report)
+    return JsonResponse({"status": report["status"]})

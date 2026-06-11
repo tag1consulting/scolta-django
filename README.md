@@ -55,6 +55,14 @@ python manage.py scolta_build          # --force --incremental --resume --restar
 {% load scolta %}{% scolta_search %}
 ```
 
+## Health endpoint
+
+`GET /api/scolta/v1/health` always answers monitoring tools: anonymous requests
+get `{"status": "ok"}` (or `"degraded"`), HTTP 200. The full diagnostic payload
+(AI provider, configured flags, index state) requires an active staff user —
+the same bar as `staff_member_required`, without the login redirect that would
+break uptime monitors.
+
 ## Wagtail
 
 If Wagtail is installed, the optional `scolta_django.wagtail` module is loaded

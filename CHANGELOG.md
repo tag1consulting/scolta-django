@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+- **The health endpoint now returns status-only to anonymous callers.**
+  `GET /api/scolta/v1/health` previously exposed the full diagnostic payload
+  (AI provider, configured flags, index state) to anyone. Monitoring endpoints
+  keep working: anonymous requests still get HTTP 200 with
+  `{"status": "ok"|"degraded"}` (the status is still computed from the full
+  report, so degradation remains visible to uptime monitors). The detail moved
+  behind admin: an active staff user — the `staff_member_required` bar, without
+  the login redirect that would break monitors. Matches the status-only
+  anonymous shape of the WordPress, Laravel, and Drupal adapters.
+
 ## [1.0.0] - 2026-06-08
 
 ### Fixed
