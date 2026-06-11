@@ -925,7 +925,6 @@ wheels = [
 
 [[package]]
 name = "scolta"
-version = "1.0.0"
 source = { editable = "../scolta-python" }
 dependencies = [
     { name = "httpx" },
@@ -947,13 +946,12 @@ requires-dist = [
     { name = "regex", specifier = ">=2024.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "selectolax", specifier = ">=0.3" },
-    { name = "snowballstemmer", specifier = ">=2.2" },
+    { name = "snowballstemmer", specifier = ">=3" },
 ]
-provides-extras = ["icu", "dev"]
+provides-extras = ["dev", "icu"]
 
 [[package]]
 name = "scolta-django"
-version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "django", version = "5.2.15", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -982,7 +980,7 @@ requires-dist = [
     { name = "wagtail", marker = "extra == 'dev'", specifier = ">=5.2" },
     { name = "wagtail", marker = "extra == 'wagtail'", specifier = ">=5.2" },
 ]
-provides-extras = ["wagtail", "dev"]
+provides-extras = ["dev", "wagtail"]
 
 [[package]]
 name = "selectolax"

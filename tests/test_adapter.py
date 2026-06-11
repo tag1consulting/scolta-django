@@ -133,30 +133,40 @@ def test_schedule_rebuild_disabled(settings, dispatch_calls):
 @pytest.mark.django_db
 def test_expand_query_no_api_key_graceful():
     # No API key configured -> graceful degradation (terms = [query]).
-    resp = Client().post("/api/scolta/v1/expand-query", data=json.dumps({"query": "chocolate cake"}),
-                         content_type="application/json")
+    resp = Client().post(
+        "/api/scolta/v1/expand-query",
+        data=json.dumps({"query": "chocolate cake"}),
+        content_type="application/json",
+    )
     assert resp.status_code == 200
     assert resp.json()["terms"] == ["chocolate cake"]
 
 
 def test_expand_query_empty_is_400():
-    resp = Client().post("/api/scolta/v1/expand-query", data=json.dumps({"query": ""}),
-                         content_type="application/json")
+    resp = Client().post(
+        "/api/scolta/v1/expand-query",
+        data=json.dumps({"query": ""}),
+        content_type="application/json",
+    )
     assert resp.status_code == 400
 
 
 def test_summarize_no_api_key_returns_empty():
-    resp = Client().post("/api/scolta/v1/summarize",
-                         data=json.dumps({"query": "q", "context": "some context"}),
-                         content_type="application/json")
+    resp = Client().post(
+        "/api/scolta/v1/summarize",
+        data=json.dumps({"query": "q", "context": "some context"}),
+        content_type="application/json",
+    )
     assert resp.status_code == 200
     assert resp.json() == {}
 
 
 def test_followup_no_api_key():
-    resp = Client().post("/api/scolta/v1/followup",
-                         data=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
-                         content_type="application/json")
+    resp = Client().post(
+        "/api/scolta/v1/followup",
+        data=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+        content_type="application/json",
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["response"] == ""
@@ -202,8 +212,9 @@ def test_health_endpoint_non_staff_user_is_status_only():
 
 
 def test_invalid_json_is_400():
-    resp = Client().post("/api/scolta/v1/expand-query", data="not json",
-                         content_type="application/json")
+    resp = Client().post(
+        "/api/scolta/v1/expand-query", data="not json", content_type="application/json"
+    )
     assert resp.status_code == 400
 
 
@@ -212,10 +223,17 @@ def test_invalid_json_is_400():
 
 @pytest.mark.django_db
 def test_scolta_build_command(tmp_path, settings):
-    settings.SCOLTA = {**settings.SCOLTA, "output_dir": str(tmp_path / "out"),
-                       "state_dir": str(tmp_path / "state")}
-    Post.objects.create(title="Indexed Post", body="A sufficiently long body for indexing purposes here.")
-    Post.objects.create(title="Another Post", body="More body content that is also long enough to index.")
+    settings.SCOLTA = {
+        **settings.SCOLTA,
+        "output_dir": str(tmp_path / "out"),
+        "state_dir": str(tmp_path / "state"),
+    }
+    Post.objects.create(
+        title="Indexed Post", body="A sufficiently long body for indexing purposes here."
+    )
+    Post.objects.create(
+        title="Another Post", body="More body content that is also long enough to index."
+    )
     ScoltaTracker.objects.all().delete()
 
     from django.core.management import call_command
@@ -301,9 +319,7 @@ def test_search_tag_container_tracks_custom_id():
     """A custom container_id flows into both the div and the config selector."""
     from django.template import Context, Template
 
-    out = Template(
-        '{% load scolta %}{% scolta_search "my-search" %}'
-    ).render(Context({}))
+    out = Template('{% load scolta %}{% scolta_search "my-search" %}').render(Context({}))
     config = _extract_window_scolta(out)
     assert config["container"] == "#my-search"
     assert 'id="my-search"' in out
@@ -314,3 +330,53 @@ def test_config_json_tag():
 
     out = Template("{% load scolta %}{% scolta_config_json %}").render(Context({}))
     assert json.loads(out)["siteName"] == "Test Site"
+
+
+# -- fail-closed settings ---------------------------------------------------------
+
+
+def test_unresolvable_model_label_raises(settings):
+    """Regression: a typo in SCOLTA["models"] was silently skipped — that
+    content was never indexed and nothing signalled it."""
+    from django.core.exceptions import ImproperlyConfigured
+
+    from scolta_django import conf
+
+    settings.SCOLTA = {**settings.SCOLTA, "models": ["typo.Nope"]}
+    with pytest.raises(ImproperlyConfigured, match=r"typo\.Nope"):
+        conf.models()
+
+
+# -- staticfiles finder ------------------------------------------------------------
+
+
+def test_static_finder_serves_vendored_assets():
+    from pathlib import Path
+
+    from scolta_django.staticfiles import ScoltaAssetFinder
+
+    finder = ScoltaAssetFinder()
+    found = finder.find("scolta/js/scolta.js")
+    assert found and Path(found).is_file()
+    assert finder.find("scolta/js/scolta.js", find_all=True) == [found]
+    assert finder.find("scolta/js/scolta.js", all=True) == [found]  # Django <5.2 kwarg
+    assert finder.find("elsewhere/x.js") is None
+    listed = {rel for rel, _storage in finder.list(None)}
+    assert "js/scolta.js" in listed
+    assert "wasm/scolta_core.js" in listed
+
+
+# -- SearchableMixin URL -----------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_searchable_prefers_get_absolute_url(monkeypatch):
+    monkeypatch.setattr(Post, "get_absolute_url", lambda self: f"/posts/{self.pk}/", raising=False)
+    post = Post.objects.create(title="Hello", body="x")
+    assert post.to_searchable_content().url == f"/posts/{post.pk}/"
+
+
+@pytest.mark.django_db
+def test_searchable_falls_back_to_table_url():
+    post = Post.objects.create(title="Hello", body="x")
+    assert post.to_searchable_content().url == f"/testapp_post/{post.pk}"

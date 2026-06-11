@@ -7,8 +7,6 @@ Paths (under the configured route prefix, default api/scolta/v1):
 
 from __future__ import annotations
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
@@ -19,10 +17,12 @@ from scolta.health import HealthChecker
 from . import conf
 from .ai import DjangoAiService
 from .cache import DjangoCacheDriver
+from .http import parse_json_body as _body
 
 
 def _make_handler() -> AiEndpointHandler:
     from .amazee import maybe_auto_provision
+
     maybe_auto_provision()
     config = conf.scolta_config()
     ai = DjangoAiService(config)
@@ -43,13 +43,6 @@ def _make_handler() -> AiEndpointHandler:
         filter_fields=config.filter_fields,
         filter_field_descriptions=config.filter_field_descriptions,
     )
-
-
-def _body(request) -> dict | None:
-    try:
-        return json.loads(request.body or b"{}")
-    except (ValueError, TypeError):
-        return None
 
 
 def _respond(result: dict) -> JsonResponse:
@@ -76,7 +69,9 @@ def summarize(request) -> JsonResponse:
     data = _body(request)
     if data is None:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-    return _respond(_make_handler().handle_summarize(str(data.get("query", "")), str(data.get("context", ""))))
+    return _respond(
+        _make_handler().handle_summarize(str(data.get("query", "")), str(data.get("context", "")))
+    )
 
 
 @csrf_exempt

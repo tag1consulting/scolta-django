@@ -2,14 +2,32 @@
 
 Drives the JSON OTP-upgrade flow through Django's test client with the
 AmazeeClient monkeypatched at ``amazee_views._client`` so no network is hit.
+All endpoints require an active staff user, so the module-level ``client``
+fixture is staff-authenticated; the access-control section below covers the
+anonymous/non-staff/CSRF cases.
 """
 
 import json
+import re
 
 import pytest
+from django.test import Client
 from scolta.ai.amazee import AmazeeApiException, UpgradeResult
 
 from scolta_django.amazee import DjangoConfigStorage
+
+
+@pytest.fixture
+def staff_user(db, django_user_model):
+    return django_user_model.objects.create_user("scolta-admin", password="pw", is_staff=True)
+
+
+@pytest.fixture
+def client(staff_user):
+    """Staff-authenticated client (the endpoints 403 anonymous callers)."""
+    c = Client()
+    c.force_login(staff_user)
+    return c
 
 
 class FakeAmazeeClient:
@@ -200,7 +218,9 @@ def test_regions_lists(client, fake_client):
 
 @pytest.mark.django_db
 def test_regions_requires_session_token(client, fake_client):
-    resp = client.post("/scolta/amazee/regions", data=json.dumps({}), content_type="application/json")
+    resp = client.post(
+        "/scolta/amazee/regions", data=json.dumps({}), content_type="application/json"
+    )
     assert resp.status_code == 400
 
 
@@ -289,30 +309,116 @@ def test_settings_page_connected_when_provisioned(client):
 
 @pytest.mark.django_db
 def test_full_upgrade_flow(client, fake_client):
-    assert client.post(
-        "/scolta/amazee/request-code",
-        data=json.dumps({"email": "a@b.com"}),
-        content_type="application/json",
-    ).status_code == 200
+    assert (
+        client.post(
+            "/scolta/amazee/request-code",
+            data=json.dumps({"email": "a@b.com"}),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
 
-    signin = _json(client.post(
-        "/scolta/amazee/sign-in",
-        data=json.dumps({"email": "a@b.com", "code": "123456"}),
-        content_type="application/json",
-    ))
+    signin = _json(
+        client.post(
+            "/scolta/amazee/sign-in",
+            data=json.dumps({"email": "a@b.com", "code": "123456"}),
+            content_type="application/json",
+        )
+    )
     token = signin["session_token"]
 
-    regions = _json(client.post(
-        "/scolta/amazee/regions",
-        data=json.dumps({"session_token": token}),
-        content_type="application/json",
-    ))["regions"]
+    regions = _json(
+        client.post(
+            "/scolta/amazee/regions",
+            data=json.dumps({"session_token": token}),
+            content_type="application/json",
+        )
+    )["regions"]
     region_id = regions[0]["id"]
 
-    upgrade = _json(client.post(
-        "/scolta/amazee/upgrade",
-        data=json.dumps({"session_token": token, "region_id": region_id}),
-        content_type="application/json",
-    ))
+    upgrade = _json(
+        client.post(
+            "/scolta/amazee/upgrade",
+            data=json.dumps({"session_token": token, "region_id": region_id}),
+            content_type="application/json",
+        )
+    )
     assert upgrade["ok"] is True
     assert DjangoConfigStorage().load()["litellm_token"] == "tok-upgraded"
+
+
+# -- access control -------------------------------------------------------------
+
+_ALL_ENDPOINTS = [
+    ("get", "/scolta/amazee/"),
+    ("get", "/scolta/amazee/status"),
+    ("post", "/scolta/amazee/provision"),
+    ("post", "/scolta/amazee/request-code"),
+    ("post", "/scolta/amazee/sign-in"),
+    ("post", "/scolta/amazee/regions"),
+    ("post", "/scolta/amazee/upgrade"),
+    ("post", "/scolta/amazee/disconnect"),
+]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("method,url", _ALL_ENDPOINTS)
+def test_anonymous_is_denied_everywhere(method, url):
+    """Regression: every Amazee endpoint was csrf_exempt with NO auth — any
+    anonymous visitor could wipe stored AI credentials via /disconnect or
+    drive trial provisioning / OTP flows against arbitrary emails."""
+    anonymous = Client()
+    resp = getattr(anonymous, method)(url, content_type="application/json")
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("method,url", _ALL_ENDPOINTS)
+def test_non_staff_user_is_denied_everywhere(method, url, django_user_model):
+    user = django_user_model.objects.create_user("regular", password="pw", is_staff=False)
+    c = Client()
+    c.force_login(user)
+    resp = getattr(c, method)(url, content_type="application/json")
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_disconnect_does_nothing_for_anonymous():
+    DjangoConfigStorage().store("tok", "https://llm.example", "us-east")
+    Client().post("/scolta/amazee/disconnect", content_type="application/json")
+    assert DjangoConfigStorage().load() is not None, "credentials must survive"
+
+
+@pytest.mark.django_db
+def test_csrf_is_enforced_for_staff(staff_user):
+    """POSTs are no longer csrf_exempt: a staff session without the token is
+    rejected; the token rendered into the settings page works."""
+    c = Client(enforce_csrf_checks=True)
+    c.force_login(staff_user)
+
+    resp = c.post("/scolta/amazee/disconnect", content_type="application/json")
+    assert resp.status_code == 403  # authenticated but no CSRF token
+
+    # The settings page embeds {{ csrf_token }} into the fetch headers (and
+    # rendering it sets the csrftoken cookie) — mirror what the Alpine UI does.
+    page = c.get("/scolta/amazee/")
+    assert page.status_code == 200
+    assert "csrftoken" in c.cookies
+    match = re.search(r"'X-CSRFToken': '([^']+)'", page.content.decode())
+    assert match, "page must embed the CSRF token for fetch()"
+
+    resp = c.post(
+        "/scolta/amazee/disconnect",
+        content_type="application/json",
+        headers={"X-CSRFToken": match.group(1)},
+    )
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_custom_amazee_access_callable(settings):
+    """SCOLTA["amazee_access"] overrides the staff default (e.g. Wagtail
+    setups whose admins are not Django-staff)."""
+    settings.SCOLTA = {**settings.SCOLTA, "amazee_access": lambda request: True}
+    resp = Client().get("/scolta/amazee/status")
+    assert resp.status_code == 200
