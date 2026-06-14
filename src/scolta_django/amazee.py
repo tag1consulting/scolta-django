@@ -68,12 +68,26 @@ def config_overrides(settings_dict: dict) -> dict:
         return {}
     if not creds:
         return {}
+    models = storage.stored_models()
+    if not models.get("ai_model"):
+        # Half-provisioned: credentials are stored but model resolution never
+        # succeeded (the provision's /model/info step failed), so no resolved
+        # model is in the store. Injecting the Amazee key here would leave
+        # ScoltaConfig on the dated default (claude-sonnet-4-5-20250929), which
+        # the Amazee LiteLLM gateway rejects with HTTP 400, breaking AI
+        # permanently and silently. Inject nothing instead: the client stays
+        # unconfigured and the endpoint degrades to an unexpanded/no-summary
+        # HTTP 200 (the same path as no credentials), never a 400. The state
+        # self-heals once maybe_auto_provision() re-resolves against the stored
+        # key (see has_resolved_models). Mirrors scolta-node's
+        # AmazeeAiService.buildClient().
+        return {}
     overrides = {
         "ai_provider": "openai",
         "ai_api_key": creds["litellm_token"],
         "ai_base_url": creds["litellm_api_url"],
     }
-    overrides.update(storage.stored_models())
+    overrides.update(models)
     return overrides
 
 
@@ -92,4 +106,11 @@ def maybe_auto_provision(client=None) -> bool:
         has_explicit_api_key=bool(conf.get("ai_api_key")),
         on_models_resolved=_save_models,
         client=client,
+        # Report whether models are already resolved. When credentials are
+        # stored but resolution previously failed, the models store is empty
+        # (the clean signal), so this returns False and ensure_ai_available()
+        # re-resolves against the ALREADY-STORED key — self-healing the
+        # half-provisioned state — instead of no-opping forever and leaving
+        # config_overrides() to strand the dated default at the gateway.
+        has_resolved_models=lambda: bool(storage.stored_models().get("ai_model")),
     )
