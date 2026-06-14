@@ -82,3 +82,30 @@ jobs:
       - name: Test (pytest)
         working-directory: scolta-django
         run: uv run pytest -q
+
+  dist:
+    name: Build & validate PyPI artifacts
+    runs-on: ubuntu-latest
+    # Independent of the path-dep sibling: `uv build` builds THIS package's
+    # wheel/sdist and does not need the `scolta` binding installed (the
+    # [tool.uv.sources] path only matters for sync/lock resolution).
+    steps:
+      - name: Check out scolta-django
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: twine check
+        run: uvx twine check dist/*
+
+      # Content + size asserts. Fails loudly if the Django app data
+      # (templatetags/templates) is missing or if dist cruft leaked. Runs
+      # locally too: `uv build && uv run python scripts/validate_dist.py`.
+      - name: Validate artifact contents
+        run: uv run --no-project python scripts/validate_dist.py
