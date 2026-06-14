@@ -67,6 +67,17 @@
 - `SearchableMixin` prefers `get_absolute_url()` over the table-name URL.
 - CI matrix extended: Python 3.13 and a Django axis (4.2 floor — previously
   untested — paired with Wagtail 6.3 LTS, and 5.2).
+- **Distribution-artifact validation in CI** (`dist` job +
+  `scripts/validate_dist.py`). Builds the wheel and sdist (`uv build`), runs
+  `twine check dist/*`, then asserts the wheel actually ships the load-bearing
+  Django app data (templatetags, the Amazee settings template, management
+  commands, migrations, the Wagtail subpackage, `py.typed`) — a Django app
+  silently missing its templatetags/templates is broken at install time. The
+  same gate sweeps both artifacts fail-closed for dist cruft (`tests/`,
+  `__pycache__`, `*.pyc`, `.ruff_cache`/`.pytest_cache`, IDE files,
+  `.egg-info`, `.venv`) and enforces ~2x size caps (wheel 64 KiB / sdist
+  224 KiB, baselines documented in the script). The script runs locally too
+  (`uv build && uv run python scripts/validate_dist.py`).
 
 ### Changed
 - Version split-brain resolved: the project version is single-sourced from
