@@ -20,6 +20,37 @@
   `json_script` semantics).
 
 ### Fixed
+- **Amazee credentials provisioned without resolved model names now self-heal
+  instead of breaking AI permanently.** The Amazee.ai trial provisioner persists
+  credentials (LiteLLM token + URL) and resolves the model names in two steps;
+  when the `/model/info` step fails, the `ScoltaAmazeeConfig` row holds
+  credentials with **no resolved models** (`store_models()` never runs).
+  `AutoProvisioner.ensure_ai_available()` then no-opped forever on the stored
+  credentials, `config_overrides()` injected the Amazee key while `ScoltaConfig`
+  fell back to the shipped dated default `claude-sonnet-4-5-20250929`, and the
+  Amazee LiteLLM gateway rejects that dated name with **HTTP 400** — so
+  summarize silently returned nothing and expand ran unexpanded, with no path
+  back. (A distinct failure class from expired-key recovery: a `400
+  invalid-model` from a half-provisioned store, not an auth failure.)
+  `maybe_auto_provision()` now passes scolta-python's new `has_resolved_models`
+  predicate — keyed off `DjangoConfigStorage.stored_models()`, which is empty in
+  the unresolved state (the clean signal, no dated-default exclusion needed) — so
+  when credentials are stored but models are not, the library re-resolves against
+  the **already-stored key** (never a fresh trial) and persists them via the
+  existing `store_models()` callback; because `maybe_auto_provision()` runs on
+  the AI-request path (`_make_handler()`), the heal happens on the next request.
+  `config_overrides()` degrades when credentials are stored but no model is
+  resolved: it injects **nothing**, so the client stays unconfigured and the
+  endpoint degrades to an unexpanded/no-summary HTTP 200 (the same path as no
+  credentials), never sending the gateway the dated default (HTTP 400). The
+  explicit-key path is unchanged (a dated model is valid on the real Anthropic
+  API); only the Amazee branch degrades. **Requires scolta-python with
+  `AutoProvisioner.ensure_ai_available()`'s `has_resolved_models` parameter
+  (scolta-python #17).** Covered by `test_model_self_heal.py` (the real
+  `AutoProvisioner` re-resolves against the stored key without provisioning a new
+  trial; `config_overrides()` degrades when unresolved; the built config never
+  carries the dated default with a key; resolution that keeps failing leaves the
+  store empty and keeps degrading).
 - **Emitted endpoints honour `SCOLTA["route_prefix"]`** (and sub-path
   mounting). The browser config hardcoded `/api/scolta/v1/...` while `urls.py`
   registers the routes under the configurable prefix — any custom prefix made

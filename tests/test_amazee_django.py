@@ -63,6 +63,10 @@ def test_config_overrides_explicit_key_wins():
 def test_scolta_config_applies_amazee(settings):
     settings.SCOLTA = {**settings.SCOLTA, "ai_api_key": ""}
     DjangoConfigStorage().store("tok-xyz", "https://llm.example", "us")
+    # A fully provisioned trial has a resolved model; only then does the config
+    # point the client at the LiteLLM gateway (a credentials-stored-but-model-
+    # unresolved install degrades instead — see test_model_self_heal.py).
+    DjangoConfigStorage().store_models("claude-sonnet-4-6", "claude-haiku-4-5")
     cfg = conf.scolta_config()
     assert cfg.ai_provider == "openai"
     assert cfg.ai_api_key == "tok-xyz"
