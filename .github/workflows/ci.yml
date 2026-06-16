@@ -39,12 +39,12 @@ jobs:
             django-version: "4.2"
     steps:
       - name: Check out scolta-django
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: scolta-django
 
       - name: Check out scolta-python (sibling, for the path dependency)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.SCOLTA_PYTHON_REPO }}
           ref: ${{ env.SCOLTA_PYTHON_REF }}
@@ -91,7 +91,7 @@ jobs:
     # [tool.uv.sources] path only matters for sync/lock resolution).
     steps:
       - name: Check out scolta-django
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
