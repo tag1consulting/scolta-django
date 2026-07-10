@@ -43,7 +43,7 @@ from scolta.ai.amazee import (
 )
 
 from . import conf
-from .amazee import DjangoConfigStorage
+from .amazee import DjangoConfigStorage, build_key_expiry_recovery
 from .http import parse_json_body as _body
 
 
@@ -107,6 +107,8 @@ def provision(request) -> JsonResponse:
         return JsonResponse({"error": str(exc)}, status=502)
     if result.ai_model or result.ai_expansion_model:
         storage.store_models(result.ai_model or "", result.ai_expansion_model or "")
+    # Fresh credentials are stored — clear any re-authentication prompt.
+    build_key_expiry_recovery().clear_upgrade_needed()
     return JsonResponse({"ok": True, "region": result.region, "status": result.status})
 
 
@@ -161,6 +163,10 @@ def upgrade(request) -> JsonResponse:
         )
     except AmazeeApiException as exc:
         return JsonResponse({"error": str(exc)}, status=502)
+    # Fresh credentials are stored — clear the re-authentication prompt. Policy:
+    # reconnection is always operator-initiated through this email-verification
+    # flow; credentials are never re-established automatically.
+    build_key_expiry_recovery().clear_upgrade_needed()
     return JsonResponse({"ok": True, "region": result.region})
 
 
@@ -168,6 +174,8 @@ def upgrade(request) -> JsonResponse:
 @require_POST
 def disconnect(request) -> JsonResponse:
     _storage().clear()
+    # No stored credentials means the re-authentication prompt no longer applies.
+    build_key_expiry_recovery().clear_upgrade_needed()
     return JsonResponse({"ok": True})
 
 
@@ -189,6 +197,11 @@ def settings_page(request):
         {
             "step": step,
             "region": creds["region"] if creds else None,
+            # True when the stored Amazee.ai credentials are no longer accepted
+            # and the operator must re-authenticate. The template shows a
+            # reconnect banner whose CTA runs the existing email-verification
+            # sign-in flow; it clears once the reconnect succeeds.
+            "upgrade_needed": build_key_expiry_recovery().is_upgrade_needed(),
             "routes": {
                 "status": reverse("scolta:amazee_status"),
                 "provision": reverse("scolta:amazee_provision"),

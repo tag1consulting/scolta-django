@@ -115,6 +115,32 @@ def test_admin_url_hook_registered():
     assert any(u.name == "scolta_admin" for u in urls)
 
 
+@pytest.mark.django_db
+@pytest.mark.urls("tests.urls_admin")
+def test_admin_panel_shows_reconnect_notice_when_upgrade_needed():
+    """A degraded-AI site must not be left dark: when the stored Amazee.ai
+    credentials need re-authentication, the panel surfaces a notice linking to
+    the reconnect flow. Absent otherwise."""
+    from django.core.cache import cache
+
+    from scolta_django.amazee import DjangoConfigStorage, build_key_expiry_recovery
+    from scolta_django.wagtail_hooks import scolta_admin_view
+
+    cache.clear()
+    try:
+        DjangoConfigStorage().store("tok", "https://llm.example", "us-east")
+
+        body = scolta_admin_view(RequestFactory().get("/admin/scolta/")).content.decode()
+        assert "needs to be re-authenticated" not in body
+
+        build_key_expiry_recovery().flag_upgrade_needed()
+        body = scolta_admin_view(RequestFactory().get("/admin/scolta/")).content.decode()
+        assert "needs to be re-authenticated" in body
+        assert "/scolta/amazee/" in body  # links to the reconnect flow
+    finally:
+        cache.clear()
+
+
 # -- rebuild form CSRF (through real middleware) --------------------------------
 
 

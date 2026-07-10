@@ -21,11 +21,19 @@ from .http import parse_json_body as _body
 
 
 def _make_handler() -> AiEndpointHandler:
-    from .amazee import maybe_auto_provision
+    from .amazee import amazee_active, build_key_expiry_recovery, maybe_auto_provision
 
     maybe_auto_provision()
     config = conf.scolta_config()
     ai = DjangoAiService(config)
+    # On the Amazee.ai path, wire re-authentication detection into the AI call
+    # path: if the stored credentials stop being accepted, the failure is
+    # recorded so /health reports AI degraded and the admin is prompted to
+    # reconnect — the call still degrades gracefully (no retry, no new
+    # credentials minted). The explicit-key path leaves this unwired, so a
+    # user's own key is never affected.
+    if amazee_active(conf._settings()):
+        ai.set_key_expiry_recovery(build_key_expiry_recovery())
     cache = DjangoCacheDriver() if config.cache_ttl > 0 else NullCacheDriver()
     return AiEndpointHandler(
         ai_service=ai,
@@ -93,7 +101,12 @@ def health(request) -> JsonResponse:
     login redirect that would break monitoring tools. The full report is
     always computed first so the trimmed status still reflects degradation.
     """
-    checker = HealthChecker(conf.scolta_config(), conf.output_dir(), None, None)
+    # Pass the cache so ai_usable reflects the KeyExpiryRecovery auth-failure
+    # marker: "configured" (credentials present) must not imply "usable"
+    # (credentials still accepted). Marker read only — never a live API call.
+    checker = HealthChecker(
+        conf.scolta_config(), conf.output_dir(), None, None, DjangoCacheDriver()
+    )
     report = checker.check()
     user = getattr(request, "user", None)
     if user is not None and user.is_active and user.is_staff:

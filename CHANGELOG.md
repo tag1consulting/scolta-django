@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Changed
+- **When the Amazee.ai connection needs re-authentication, the admin now
+  surfaces a prompt to reconnect, and AI health status reflects the credential
+  state.** Amazee.ai credentials are validated server-side and can stop being
+  accepted; the failure only shows up on the next AI request. That state is now
+  detected on the AI call path and recorded so `/health` reports AI as degraded
+  (`ai_usable: false`) rather than continuing to report it configured. The
+  Amazee.ai settings page and the Wagtail admin panel show a notice with a
+  "Continue with Amazee.ai" call to action that runs the existing
+  email-verification reconnect flow, and the Amazee.ai management command
+  reports the state and the reconnect path. The prompt clears automatically once
+  a reconnect stores fresh credentials. The connection is only ever
+  re-established by an operator through this flow — never automatically. Updated
+  to the latest `scolta` library (`>=1.0.1`).
+
 ### Security
 - **The Amazee.ai endpoints and settings page now require an admin user and
   enforce CSRF** (`amazee_views.py`). All eight JSON views were `csrf_exempt`

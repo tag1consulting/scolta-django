@@ -13,8 +13,24 @@
 {% endcomment %}
 {{ routes|json_script:"amazee-routes" }}
 <div id="scolta-amazee"
-     x-data="amazeeSettings('{{ step }}', JSON.parse(document.getElementById('amazee-routes').textContent))"
+     x-data="amazeeSettings('{{ step }}', JSON.parse(document.getElementById('amazee-routes').textContent), {{ upgrade_needed|yesno:'true,false' }})"
      x-init="init()">
+
+    {# Re-authentication needed: the stored Amazee.ai credentials are no longer
+       accepted. Rendered server-side so it is present on first load, and hidden
+       client-side once a reconnect succeeds. The CTA runs the existing
+       email-verification sign-in flow. #}
+    {% if upgrade_needed %}
+    <div x-show="upgradeNeeded" class="alert alert-warning" role="alert">
+        <p>
+            Your Amazee.ai connection needs to be re-authenticated. AI search
+            features are paused until you reconnect.
+        </p>
+        <button type="button" @click="continueWithAmazee()" :disabled="loading" class="btn btn-primary btn-sm">
+            Continue with Amazee.ai
+        </button>
+    </div>
+    {% endif %}
 
     {# Connected #}
     <template x-if="step === 'connected'">
@@ -109,7 +125,7 @@
 </div>
 
 <script>
-function amazeeSettings(initialStep, routes) {
+function amazeeSettings(initialStep, routes, upgradeNeeded) {
     return {
         step: initialStep || 'start',
         email: '',
@@ -122,6 +138,14 @@ function amazeeSettings(initialStep, routes) {
         loadingRegions: false,
         error: '',
         routes: routes,
+        upgradeNeeded: upgradeNeeded || false,
+
+        // Re-authentication CTA: run the existing email-verification sign-in
+        // flow to reconnect the Amazee.ai account.
+        continueWithAmazee() {
+            this.error = '';
+            this.step = 'start';
+        },
 
         async init() {
             if (this.step === 'connected') {
@@ -175,6 +199,8 @@ function amazeeSettings(initialStep, routes) {
                 });
                 const cred = this.regions.find(r => r.id === this.selectedRegion);
                 this.region = res.region || (cred ? (cred.name ?? cred.id) : this.selectedRegion);
+                // Reconnect succeeded (server cleared the marker) — dismiss the banner.
+                this.upgradeNeeded = false;
                 this.step = 'connected';
             } catch (e) { this.error = e.message; } finally { this.loading = false; }
         },

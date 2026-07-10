@@ -108,12 +108,19 @@ def admin_status() -> dict:
     """Status surface for the Wagtail admin panel — reflects the SAVED config."""
     from scolta.health import HealthChecker
 
+    from ..amazee import build_key_expiry_recovery
+    from ..cache import DjangoCacheDriver
+
     config = conf.scolta_config()
-    health = HealthChecker(config, conf.output_dir(), None, None).check()
+    health = HealthChecker(config, conf.output_dir(), None, None, DjangoCacheDriver()).check()
     return {
         "site_name": config.site_name,
         "indexer": config.indexer,
         "index_exists": health["index_exists"],
         "ai_configured": health["ai_configured"],
+        "ai_usable": health["ai_usable"],
+        # True when the stored Amazee.ai credentials need to be re-established
+        # through the operator-initiated reconnect flow (see the settings page).
+        "upgrade_needed": build_key_expiry_recovery().is_upgrade_needed(),
         "pending_changes": ScoltaTracker.pending_count(),
     }
