@@ -14,7 +14,7 @@ keywords = ["django", "search", "pagefind", "ai", "scolta", "wagtail"]
 
 dependencies = [
     "Django>=4.2",
-    "scolta>=1.0.0",
+    "scolta>=1.0.1",
 ]
 
 [project.optional-dependencies]

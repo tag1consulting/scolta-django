@@ -33,15 +33,30 @@ def scolta_admin_view(request):
             message = "Rebuild dispatched."
 
     s = admin_status()
+    # When the stored Amazee.ai credentials need re-authentication, surface a
+    # notice with a link to the settings page so a degraded-AI site is never
+    # left dark and silent — the operator sees why and how to reconnect.
+    notice = ""
+    if s.get("upgrade_needed"):
+        notice = format_html(
+            '<p style="padding:0.75em;border:1px solid #b26a00;background:#fff3e0;">'
+            "The Amazee.ai connection needs to be re-authenticated. AI search "
+            "features are degraded until you reconnect. "
+            '<a href="{}">Reconnect Amazee.ai</a>.</p>',
+            reverse("scolta:amazee_settings"),
+        )
+
     return HttpResponse(
         format_html(
             "<h1>Scolta Search</h1>"
+            "{}"
             "<p>Site: {}</p><p>Indexer: {}</p>"
             "<p>Index built: {}</p><p>AI configured: {}</p>"
             "<p>Pending changes: {}</p>"
             "{}"
             '<form method="post"><input type="hidden" name="csrfmiddlewaretoken" value="{}">'
             '<button type="submit">Rebuild index</button></form>',
+            notice,
             s["site_name"],
             s["indexer"],
             s["index_exists"],

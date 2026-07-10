@@ -7,10 +7,14 @@ resolved config points the OpenAI-compatible AiClient at the LiteLLM endpoint.
 
 from __future__ import annotations
 
-from scolta.ai.amazee import AutoProvisioner, ConfigStorage
+import logging
+
+from scolta.ai.amazee import AutoProvisioner, ConfigStorage, KeyExpiryRecovery
 
 from . import conf
 from .models import ScoltaAmazeeConfig
+
+_logger = logging.getLogger("scolta_django.amazee")
 
 
 class DjangoConfigStorage(ConfigStorage):
@@ -89,6 +93,38 @@ def config_overrides(settings_dict: dict) -> dict:
     }
     overrides.update(models)
     return overrides
+
+
+def amazee_active(settings_dict: dict) -> bool:
+    """Whether the Amazee.ai gateway is the active AI path.
+
+    True when credentials are stored and no explicit ``ai_api_key`` is set (an
+    explicit key always wins and is never touched by this subsystem). This is
+    the same condition under which :func:`config_overrides` points the client at
+    the LiteLLM endpoint, so it also gates the credential re-authentication
+    wiring below.
+    """
+    if settings_dict.get("ai_api_key"):
+        return False
+    try:
+        return DjangoConfigStorage().load() is not None
+    except Exception:
+        return False
+
+
+def build_key_expiry_recovery() -> KeyExpiryRecovery:
+    """Construct the KeyExpiryRecovery helper backed by the adapter's stores.
+
+    Policy: the stored Amazee.ai credentials are only ever re-established by an
+    operator through the email-verification flow — this subsystem detects when
+    they stop being accepted and routes the operator to reconnect, it never
+    re-establishes the connection on its own. The cache is the same one the AI
+    endpoint, ``/health`` and the settings page use, so the degraded state and
+    the re-authentication prompt stay consistent across all of them.
+    """
+    from .cache import DjangoCacheDriver
+
+    return KeyExpiryRecovery(DjangoConfigStorage(), DjangoCacheDriver(), _logger)
 
 
 def maybe_auto_provision(client=None) -> bool:
