@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-10
+
 ### Changed
 - **When the Amazee.ai connection needs re-authentication, the admin now
   surfaces a prompt to reconnect, and AI health status reflects the credential
@@ -16,27 +18,52 @@
   a reconnect stores fresh credentials. The connection is only ever
   re-established by an operator through this flow — never automatically. Updated
   to the latest `scolta` library (`>=1.0.1`).
+- Version split-brain resolved: the project version is single-sourced from
+  `src/scolta_django/__init__.py` via `[tool.hatch.version]` (pyproject said
+  `1.0.0` while `__version__` said `1.0.4.dev0`).
+- The app config class is `ScoltaDjangoConfig` (no longer shadows
+  `scolta.config.ScoltaConfig`); the inert `default_app_config` is gone; the
+  dead `--sync` flag of `manage.py scolta_build` is removed (the command is
+  synchronous regardless); `_body()` is shared between the view modules
+  (`scolta_django/http.py`).
+- Lint posture mirrors scolta-python: `ruff format` enforced in CI
+  (`--check`), select extended with `C4`, `SIM`, `RET`, `RUF` (migrations
+  ignore `RUF012`), CI lints the whole tree.
+- **The health endpoint now returns status-only to anonymous callers.**
+  `GET /api/scolta/v1/health` previously exposed the full diagnostic payload
+  (AI provider, configured flags, index state) to anyone. Monitoring endpoints
+  keep working: anonymous requests still get HTTP 200 with
+  `{"status": "ok"|"degraded"}` (the status is still computed from the full
+  report, so degradation remains visible to uptime monitors). The detail moved
+  behind admin: an active staff user — the `staff_member_required` bar, without
+  the login redirect that would break monitors. Matches the status-only
+  anonymous shape of the WordPress, Laravel, and Drupal adapters.
 
-### Security
-- **The Amazee.ai endpoints and settings page now require an admin user and
-  enforce CSRF** (`amazee_views.py`). All eight JSON views were `csrf_exempt`
-  with no auth at all: any anonymous visitor could `disconnect()` (wiping the
-  site's stored AI credentials), trigger trial provisioning, or drive OTP
-  flows against arbitrary emails. The default bar is an active staff user
-  (`staff_member_required` semantics; the JSON endpoints return 403 rather
-  than redirect). Hosts whose admins are not Django-staff (e.g. some Wagtail
-  setups) can override via `SCOLTA["amazee_access"]`, a callable
-  `(request) -> bool`. `csrf_exempt` is dropped everywhere; the Alpine.js
-  settings UI sends `X-CSRFToken` (embedded via `{{ csrf_token }}`).
-- **`{% scolta_search %}` / `{% scolta_config_json %}` escape the emitted JSON
-  for script context** (`templatetags/scolta.py`). `json.dumps` + `mark_safe`
-  did not escape `</script>`, so a config value containing it broke out of the
-  inline script block. `<`, `>`, `&` are now `\uXXXX`-escaped (Django
-  `json_script` semantics).
+### Added
+- **`scolta_django.staticfiles.ScoltaAssetFinder`** — exposes the `scolta`
+  package's vendored browser runtime to `collectstatic`/dev-server static
+  serving under `scolta/` (the default `asset_url` previously required
+  hand-copying files out of site-packages). README documents the finder, the
+  `asset_url` setting, and the `SCOLTA["wagtail"]` opt-in flag.
+- **PEP 561 `py.typed` marker**; verified shipped in the wheel.
+- `SearchableMixin` prefers `get_absolute_url()` over the table-name URL.
+- CI matrix extended: Python 3.13 and a Django axis (4.2 floor — previously
+  untested — paired with Wagtail 6.3 LTS, and 5.2).
+- **Distribution-artifact validation in CI** (`dist` job +
+  `scripts/validate_dist.py`). Builds the wheel and sdist (`uv build`), runs
+  `twine check dist/*`, then asserts the wheel actually ships the load-bearing
+  Django app data (templatetags, the Amazee settings template, management
+  commands, migrations, the Wagtail subpackage, `py.typed`) — a Django app
+  silently missing its templatetags/templates is broken at install time. The
+  same gate sweeps both artifacts fail-closed for dist cruft (`tests/`,
+  `__pycache__`, `*.pyc`, `.ruff_cache`/`.pytest_cache`, IDE files,
+  `.egg-info`, `.venv`) and enforces ~2x size caps (wheel 64 KiB / sdist
+  224 KiB, baselines documented in the script). The script runs locally too
+  (`uv build && uv run python scripts/validate_dist.py`).
 
 ### Fixed
-- **Amazee credentials provisioned without resolved model names now self-heal
-  instead of breaking AI permanently.** The Amazee.ai trial provisioner persists
+- **Amazee.ai credentials stored without resolved model names now self-heal
+  instead of breaking AI permanently.** The Amazee.ai connection setup persists
   credentials (LiteLLM token + URL) and resolves the model names in two steps;
   when the `/model/info` step fails, the `ScoltaAmazeeConfig` row holds
   credentials with **no resolved models** (`store_models()` never runs).
@@ -45,13 +72,13 @@
   fell back to the shipped dated default `claude-sonnet-4-5-20250929`, and the
   Amazee LiteLLM gateway rejects that dated name with **HTTP 400** — so
   summarize silently returned nothing and expand ran unexpanded, with no path
-  back. (A distinct failure class from expired-key recovery: a `400
-  invalid-model` from a half-provisioned store, not an auth failure.)
+  back. (A distinct failure class from credential re-authentication: a `400
+  invalid-model` from a half-configured store, not an auth failure.)
   `maybe_auto_provision()` now passes scolta-python's new `has_resolved_models`
   predicate — keyed off `DjangoConfigStorage.stored_models()`, which is empty in
   the unresolved state (the clean signal, no dated-default exclusion needed) — so
   when credentials are stored but models are not, the library re-resolves against
-  the **already-stored key** (never a fresh trial) and persists them via the
+  the **already-stored key** (never a fresh account) and persists them via the
   existing `store_models()` callback; because `maybe_auto_provision()` runs on
   the AI-request path (`_make_handler()`), the heal happens on the next request.
   `config_overrides()` degrades when credentials are stored but no model is
@@ -62,8 +89,8 @@
   API); only the Amazee branch degrades. **Requires scolta-python with
   `AutoProvisioner.ensure_ai_available()`'s `has_resolved_models` parameter
   (scolta-python #17).** Covered by `test_model_self_heal.py` (the real
-  `AutoProvisioner` re-resolves against the stored key without provisioning a new
-  trial; `config_overrides()` degrades when unresolved; the built config never
+  `AutoProvisioner` re-resolves against the stored key without requesting a new
+  account; `config_overrides()` degrades when unresolved; the built config never
   carries the dated default with a key; resolution that keeps failing leaves the
   store empty and keeps degrading).
 - **Emitted endpoints honour `SCOLTA["route_prefix"]`** (and sub-path
@@ -103,49 +130,18 @@
   Amazee config overlay is gone; `config_overrides()` already guards the
   expected missing-table case narrowly.
 
-### Added
-- **`scolta_django.staticfiles.ScoltaAssetFinder`** — exposes the `scolta`
-  package's vendored browser runtime to `collectstatic`/dev-server static
-  serving under `scolta/` (the default `asset_url` previously required
-  hand-copying files out of site-packages). README documents the finder, the
-  `asset_url` setting, and the `SCOLTA["wagtail"]` opt-in flag.
-- **PEP 561 `py.typed` marker**; verified shipped in the wheel.
-- `SearchableMixin` prefers `get_absolute_url()` over the table-name URL.
-- CI matrix extended: Python 3.13 and a Django axis (4.2 floor — previously
-  untested — paired with Wagtail 6.3 LTS, and 5.2).
-- **Distribution-artifact validation in CI** (`dist` job +
-  `scripts/validate_dist.py`). Builds the wheel and sdist (`uv build`), runs
-  `twine check dist/*`, then asserts the wheel actually ships the load-bearing
-  Django app data (templatetags, the Amazee settings template, management
-  commands, migrations, the Wagtail subpackage, `py.typed`) — a Django app
-  silently missing its templatetags/templates is broken at install time. The
-  same gate sweeps both artifacts fail-closed for dist cruft (`tests/`,
-  `__pycache__`, `*.pyc`, `.ruff_cache`/`.pytest_cache`, IDE files,
-  `.egg-info`, `.venv`) and enforces ~2x size caps (wheel 64 KiB / sdist
-  224 KiB, baselines documented in the script). The script runs locally too
-  (`uv build && uv run python scripts/validate_dist.py`).
-
-### Changed
-- Version split-brain resolved: the project version is single-sourced from
-  `src/scolta_django/__init__.py` via `[tool.hatch.version]` (pyproject said
-  `1.0.0` while `__version__` said `1.0.4.dev0`).
-- The app config class is `ScoltaDjangoConfig` (no longer shadows
-  `scolta.config.ScoltaConfig`); the inert `default_app_config` is gone; the
-  dead `--sync` flag of `manage.py scolta_build` is removed (the command is
-  synchronous regardless); `_body()` is shared between the view modules
-  (`scolta_django/http.py`).
-- Lint posture mirrors scolta-python: `ruff format` enforced in CI
-  (`--check`), select extended with `C4`, `SIM`, `RET`, `RUF` (migrations
-  ignore `RUF012`), CI lints the whole tree.
-- **The health endpoint now returns status-only to anonymous callers.**
-  `GET /api/scolta/v1/health` previously exposed the full diagnostic payload
-  (AI provider, configured flags, index state) to anyone. Monitoring endpoints
-  keep working: anonymous requests still get HTTP 200 with
-  `{"status": "ok"|"degraded"}` (the status is still computed from the full
-  report, so degradation remains visible to uptime monitors). The detail moved
-  behind admin: an active staff user — the `staff_member_required` bar, without
-  the login redirect that would break monitors. Matches the status-only
-  anonymous shape of the WordPress, Laravel, and Drupal adapters.
+### Hardening
+- **The Amazee.ai settings endpoints now require an authenticated admin user
+  and enforce CSRF** (`amazee_views.py`). The access bar is an active staff
+  user (`staff_member_required` semantics; the JSON endpoints return 403 rather
+  than redirect), overridable via `SCOLTA["amazee_access"]`, a callable
+  `(request) -> bool` — for hosts whose admins are not Django-staff (e.g. some
+  Wagtail setups). The Alpine.js settings UI sends `X-CSRFToken` (embedded via
+  `{{ csrf_token }}`).
+- **`{% scolta_search %}` / `{% scolta_config_json %}` escape the emitted JSON
+  for script context** (`templatetags/scolta.py`). `<`, `>`, `&` are
+  `\uXXXX`-escaped (Django `json_script` semantics), so a value containing
+  `</script>` is safely encoded instead of ending the inline script block.
 
 ## [1.0.0] - 2026-06-08
 
