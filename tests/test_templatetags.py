@@ -138,3 +138,48 @@ def test_emitted_config_satisfies_widget_mount_contract():
             content_type="application/json",
         )
         assert resp.status_code not in (404, 405), f"emitted endpoint {name} -> {url} is dead"
+
+
+# -- core scolta config keys reach the browser ----------------------------------
+
+
+def test_hide_empty_facets_defaults_to_true():
+    """The facet-visibility opt-out must be emitted, not merely defaulted.
+
+    scolta.js reads an absent key as "hide" (only a literal false disables it),
+    so a missing key looks identical to true in the browser. Asserting the key is
+    present is what makes the false case below meaningful.
+    """
+    config = _extract_window_config(scolta_search())
+    assert config["hideEmptyFacets"] is True
+
+
+def test_hide_empty_facets_opt_out_reaches_the_browser(settings):
+    """The false direction is the load-bearing one.
+
+    hide_empty_facets is a core scolta key, not an adapter key: it needs no
+    conf.py accessor and no template-tag change, because scolta_config() hands
+    the whole SCOLTA dict to ScoltaConfig.from_dict() and _emitted_browser_config()
+    passes through whatever to_browser_config() returns. This test pins that
+    pass-through end to end.
+    """
+    settings.SCOLTA = {**settings.SCOLTA, "hide_empty_facets": False}
+    config = _extract_window_config(scolta_search())
+    assert config["hideEmptyFacets"] is False
+
+
+def test_specificity_scoring_key_reaches_the_browser(settings):
+    """A specificity knob must reach window.scolta.scoring, same mechanism.
+
+    Covers the scoring path as well as the top-level one: the six specificity
+    keys and the two filter-hint keys cross as scoring sub-keys rather than
+    top-level ones, so a top-level assertion alone would not exercise them.
+    """
+    config = _extract_window_config(scolta_search())
+    assert config["scoring"]["SPECIFICITY_COOCCURRENCE"] == 0.9
+    assert config["scoring"]["SPECIFICITY_AGREEMENT_GATE"] == 0.45
+    assert config["scoring"]["SPECIFICITY_AGREEMENT_DECAY"] == 1.0
+
+    settings.SCOLTA = {**settings.SCOLTA, "specificity_cooccurrence": 1.4}
+    config = _extract_window_config(scolta_search())
+    assert config["scoring"]["SPECIFICITY_COOCCURRENCE"] == 1.4

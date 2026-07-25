@@ -21,8 +21,31 @@ SCOLTA = {
     "auto_rebuild": True,              # debounced rebuild on model save/delete
     "auto_rebuild_delay": 300,
     "route_prefix": "api/scolta/v1",
+
+    # Filter sidebar: hide a facet value with no results for the current query,
+    # and drop a filter group whose values are all zero. An active (checked)
+    # value stays visible so it can be unchecked. Set False to render every
+    # value, showing a zero-count one as a disabled "(0)" row.
+    "hide_empty_facets": True,
+
+    # Ranking: weight each partial match by how rare its term is in the corpus,
+    # so a match on a rare intent-bearing term outranks a match on a ubiquitous
+    # one. The defaults below are the browser's own, so omit them unless tuning.
+    "specificity_weighting": True,     # False restores flat sub-query weighting
+    "specificity_floor": 0.15,         # floor for a ubiquitous term's weight (0-1)
+    "specificity_strong_match": 0.55,  # specificity counting as a strong hit (0-1)
+    # Co-occurrence: a page agreeing with several query terms outranks one that
+    # spikes on a single rare word.
+    "specificity_cooccurrence": 0.9,   # bonus multiplier (0-5); 0 disables
+    "specificity_agreement_gate": 0.45,   # specificity a term needs to count (0-1)
+    "specificity_agreement_decay": 1.0,   # factor per successive agreeing term
 }
 ```
+
+Every core `scolta` config key is accepted here: the whole `SCOLTA` dict is handed
+to `ScoltaConfig.from_dict()`, which ignores keys it does not recognise. See
+[scolta-python's `docs/CONFIG_REFERENCE.md`](https://github.com/tag1consulting/scolta-python/blob/main/docs/CONFIG_REFERENCE.md)
+for the full list and defaults.
 
 ```python
 # urls.py
