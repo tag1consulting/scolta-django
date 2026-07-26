@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Added
+- **The facet-visibility opt-out and the six specificity ranking tunables are now
+  configurable through the `SCOLTA` settings dict, with regression coverage
+  (`tests/test_templatetags.py`, `README.md`, `example/demo/settings.py`).**
+  `hide_empty_facets` (default `True`) controls whether the filter sidebar hides
+  a facet value with no results for the current query and drops a filter group
+  whose values are all zero; `specificity_weighting`, `specificity_floor`,
+  `specificity_strong_match`, `specificity_cooccurrence`,
+  `specificity_agreement_gate` and `specificity_agreement_decay` tune
+  specificity-weighted and co-occurrence ranking.
+
+  All seven are inherited from the `scolta` package rather than implemented here,
+  and deliberately need **no adapter code**: `conf.scolta_config()` hands the
+  whole `SCOLTA` dict to `ScoltaConfig.from_dict()`, which ignores unrecognised
+  keys, and `_emitted_browser_config()` passes through whatever
+  `to_browser_config()` returns. Core config keys get no typed accessor by
+  convention (neither does `show_attribution`), so none was added. What was
+  missing was any test proving that pass-through actually holds, which is the
+  same absence that let three of these keys ship readable-but-unsettable
+  upstream. Three tests now pin it end to end: `hideEmptyFacets` emitted `true`
+  by default, `false` under an override, and a specificity knob crossing as a
+  `scoring` sub-key rather than a top-level one.
+
+  The defaults are byte-equal to the browser's own fallbacks, so no existing
+  site's ranking or facet behaviour changes.
+
 ## [1.0.1] - 2026-07-10
 
 ### Changed

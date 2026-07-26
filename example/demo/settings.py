@@ -51,4 +51,15 @@ SCOLTA = {
     "auto_rebuild": True,
     "auto_rebuild_delay": 5,  # short window for demoing edit->rebuild
     "route_prefix": "api/scolta/v1",
+    # Facet sidebar: hide values with no results for the current query. Set
+    # False to render every value, a zero-count one as a disabled "(0)" row.
+    "hide_empty_facets": True,
+    # Ranking knobs, shown at their defaults. All six are core scolta keys, so
+    # they need no adapter plumbing; omit them unless you are tuning.
+    "specificity_weighting": True,
+    "specificity_floor": 0.15,
+    "specificity_strong_match": 0.55,
+    "specificity_cooccurrence": 0.9,
+    "specificity_agreement_gate": 0.45,
+    "specificity_agreement_decay": 1.0,
 }
