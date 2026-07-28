@@ -183,3 +183,113 @@ def test_specificity_scoring_key_reaches_the_browser(settings):
     settings.SCOLTA = {**settings.SCOLTA, "specificity_cooccurrence": 1.4}
     config = _extract_window_config(scolta_search())
     assert config["scoring"]["SPECIFICITY_COOCCURRENCE"] == 1.4
+
+
+# -- search as you type ---------------------------------------------------------
+
+# The ten browser keys and the fallbacks the bundle uses when a key is absent.
+SAYT_DEFAULTS = {
+    "saytEnabled": True,
+    "saytMinChars": 2,
+    "saytDebounceMs": 150,
+    "saytMaxSuggestions": 6,
+    "saytRecentSearches": True,
+    "saytMaxRecent": 3,
+    "saytExpand": True,
+    "saytExpandPerMinute": 6,
+    "saytExpansionDelayMs": 500,
+    "saytSuggestionAction": "navigate",
+}
+
+
+def test_sayt_defaults_reach_the_browser():
+    """All ten must be emitted, not merely defaulted.
+
+    scolta.js treats an absent key as the default, so a missing key looks
+    identical to a correct one in the browser. Asserting presence is what makes
+    the override cases below meaningful.
+    """
+    config = _extract_window_config(scolta_search())
+    for key, expected in SAYT_DEFAULTS.items():
+        assert key in config, f"{key} must be emitted, not left to the bundle's fallback"
+        assert config[key] == expected, f"{key} must be emitted as its documented default"
+        assert key not in config["scoring"], f"{key} is a top-level key, not a scoring one"
+
+
+def test_sayt_settings_reach_the_browser(settings):
+    """A SCOLTA dict carrying sayt keys reaches the emitted browser config.
+
+    These are core scolta keys, not adapter keys: they need no conf.py accessor
+    and no template-tag change, because scolta_config() hands the whole SCOLTA
+    dict to ScoltaConfig.from_dict() and the tag passes through whatever
+    to_browser_config() returns. This pins that pass-through end to end for all
+    ten, which is the only reason no adapter code ships with this feature.
+    """
+    settings.SCOLTA = {
+        **settings.SCOLTA,
+        "sayt_enabled": False,
+        "sayt_min_chars": 1,
+        "sayt_debounce_ms": 400,
+        "sayt_max_suggestions": 10,
+        "sayt_recent_searches": False,
+        "sayt_max_recent": 5,
+        "sayt_expand": False,
+        "sayt_expand_per_minute": 2,
+        "sayt_expansion_delay_ms": 800,
+        "sayt_suggestion_action": "search",
+    }
+    config = _extract_window_config(scolta_search())
+
+    assert config["saytEnabled"] is False
+    assert config["saytMinChars"] == 1
+    assert config["saytDebounceMs"] == 400
+    assert config["saytMaxSuggestions"] == 10
+    assert config["saytRecentSearches"] is False
+    assert config["saytMaxRecent"] == 5
+    assert config["saytExpand"] is False
+    assert config["saytExpandPerMinute"] == 2
+    assert config["saytExpansionDelayMs"] == 800
+    assert config["saytSuggestionAction"] == "search"
+
+
+def test_sayt_disabled_reaches_the_browser_as_false(settings):
+    """The off direction is the load-bearing one: SAYT is on by default in the
+    bundle too, so an emission that dropped the key would still look correct."""
+    settings.SCOLTA = {**settings.SCOLTA, "sayt_enabled": False}
+    assert _extract_window_config(scolta_search())["saytEnabled"] is False
+
+
+def test_sayt_string_settings_coerce_like_every_other_key(settings):
+    """A settings dict built from environment variables carries strings."""
+    settings.SCOLTA = {
+        **settings.SCOLTA,
+        "sayt_enabled": "0",
+        "sayt_min_chars": "3",
+        "sayt_debounce_ms": "250",
+    }
+    config = _extract_window_config(scolta_search())
+
+    assert config["saytEnabled"] is False
+    assert config["saytMinChars"] == 3
+    assert config["saytDebounceMs"] == 250
+
+
+def test_unknown_sayt_suggestion_action_reaches_the_browser_as_navigate(settings):
+    """Clamped once on the way out rather than rediscovered client-side."""
+    settings.SCOLTA = {**settings.SCOLTA, "sayt_suggestion_action": "teleport"}
+    assert _extract_window_config(scolta_search())["saytSuggestionAction"] == "navigate"
+
+
+def test_sayt_json_config_matches_the_widget_emission(settings):
+    """scolta_config_json() is the second emission path and must agree.
+
+    A project that mounts the widget itself uses this tag instead of
+    scolta_search(), so a key present in one and absent from the other is a
+    feature that works on one mounting path only.
+    """
+    settings.SCOLTA = {**settings.SCOLTA, "sayt_max_recent": 5}
+    config = json.loads(str(scolta_config_json()))
+
+    for key in SAYT_DEFAULTS:
+        assert key in config, f"{key} must be emitted by scolta_config_json() too"
+    assert config["saytMaxRecent"] == 5

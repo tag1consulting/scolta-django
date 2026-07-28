@@ -39,6 +39,22 @@ SCOLTA = {
     "specificity_cooccurrence": 0.9,   # bonus multiplier (0-5); 0 disables
     "specificity_agreement_gate": 0.45,   # specificity a term needs to count (0-1)
     "specificity_agreement_decay": 1.0,   # factor per successive agreeing term
+
+    # Search as you type: a suggestions dropdown while someone types. The full
+    # search (AI expansion, summary, follow-ups) still runs only on Enter, on the
+    # search button, or on picking a suggestion. On by default, and no index
+    # rebuild is needed. The defaults below are the browser's own, so omit them
+    # unless tuning; sayt_enabled False restores the previous search box exactly.
+    "sayt_enabled": True,
+    "sayt_min_chars": 2,               # graphemes typed before suggesting; CJK wants 1
+    "sayt_debounce_ms": 150,           # typing pause before suggestions are fetched
+    "sayt_max_suggestions": 6,         # also the cap on index reads per pass
+    "sayt_recent_searches": True,      # the visitor's own, from their browser storage
+    "sayt_max_recent": 3,
+    "sayt_expand": True,               # enrich suggestions with AI query expansion
+    "sayt_expand_per_minute": 6,       # shares the AI budget with committed searches
+    "sayt_expansion_delay_ms": 500,    # idle delay before an AI call, longer than above
+    "sayt_suggestion_action": "navigate",  # or "search" to run the full search
 }
 ```
 
