@@ -62,4 +62,16 @@ SCOLTA = {
     "specificity_cooccurrence": 0.9,
     "specificity_agreement_gate": 0.45,
     "specificity_agreement_decay": 1.0,
+    # Search as you type, shown at its defaults. Also core scolta keys, so no
+    # adapter plumbing; sayt_enabled False restores the previous search box.
+    "sayt_enabled": True,
+    "sayt_min_chars": 2,
+    "sayt_debounce_ms": 150,
+    "sayt_max_suggestions": 6,
+    "sayt_recent_searches": True,
+    "sayt_max_recent": 3,
+    "sayt_expand": True,
+    "sayt_expand_per_minute": 6,
+    "sayt_expansion_delay_ms": 500,
+    "sayt_suggestion_action": "navigate",
 }
