@@ -18,6 +18,7 @@ import re
 import pytest
 from django.test import Client
 from django.urls import clear_url_caches
+from scolta.config import ScoltaConfig
 
 from scolta_django.templatetags.scolta import scolta_config_json, scolta_search
 
@@ -187,6 +188,24 @@ def test_specificity_scoring_key_reaches_the_browser(settings):
 
 # -- search as you type ---------------------------------------------------------
 
+# Search as you type arrives in scolta 1.1, and this adapter accepts any
+# scolta >= 1.0.1. Against an older binding the SAYT keys are not fields on
+# ScoltaConfig at all, so from_dict() drops them and to_browser_config() cannot
+# emit them — nothing is broken, the feature simply does not exist yet. The
+# cases below therefore skip rather than fail there.
+#
+# The pass-through they exercise stays covered unconditionally by the
+# hide_empty_facets pair above, which uses a key every supported scolta has, so
+# a regression in the mechanism itself cannot hide behind this skip. Drop the
+# marker when the dependency floor moves to scolta >= 1.1.
+requires_sayt_in_scolta = pytest.mark.skipif(
+    not hasattr(ScoltaConfig(), "sayt_enabled"),
+    reason=(
+        "installed scolta predates search-as-you-type (no sayt_* config fields); "
+        "needs scolta with tag1consulting/scolta-python#43"
+    ),
+)
+
 # The ten browser keys and the fallbacks the bundle uses when a key is absent.
 SAYT_DEFAULTS = {
     "saytEnabled": True,
@@ -202,6 +221,7 @@ SAYT_DEFAULTS = {
 }
 
 
+@requires_sayt_in_scolta
 def test_sayt_defaults_reach_the_browser():
     """All ten must be emitted, not merely defaulted.
 
@@ -216,6 +236,7 @@ def test_sayt_defaults_reach_the_browser():
         assert key not in config["scoring"], f"{key} is a top-level key, not a scoring one"
 
 
+@requires_sayt_in_scolta
 def test_sayt_settings_reach_the_browser(settings):
     """A SCOLTA dict carrying sayt keys reaches the emitted browser config.
 
@@ -252,6 +273,7 @@ def test_sayt_settings_reach_the_browser(settings):
     assert config["saytSuggestionAction"] == "search"
 
 
+@requires_sayt_in_scolta
 def test_sayt_disabled_reaches_the_browser_as_false(settings):
     """The off direction is the load-bearing one: SAYT is on by default in the
     bundle too, so an emission that dropped the key would still look correct."""
@@ -259,6 +281,7 @@ def test_sayt_disabled_reaches_the_browser_as_false(settings):
     assert _extract_window_config(scolta_search())["saytEnabled"] is False
 
 
+@requires_sayt_in_scolta
 def test_sayt_string_settings_coerce_like_every_other_key(settings):
     """A settings dict built from environment variables carries strings."""
     settings.SCOLTA = {
@@ -274,12 +297,14 @@ def test_sayt_string_settings_coerce_like_every_other_key(settings):
     assert config["saytDebounceMs"] == 250
 
 
+@requires_sayt_in_scolta
 def test_unknown_sayt_suggestion_action_reaches_the_browser_as_navigate(settings):
     """Clamped once on the way out rather than rediscovered client-side."""
     settings.SCOLTA = {**settings.SCOLTA, "sayt_suggestion_action": "teleport"}
     assert _extract_window_config(scolta_search())["saytSuggestionAction"] == "navigate"
 
 
+@requires_sayt_in_scolta
 def test_sayt_json_config_matches_the_widget_emission(settings):
     """scolta_config_json() is the second emission path and must agree.
 
