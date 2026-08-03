@@ -225,7 +225,8 @@ def test_no_operator_facing_wording_claims_an_automatic_trial():
         (ROOT / "src/scolta_django/templates").rglob("*.html")
     ):
         text = path.read_text()
-        for banned in ("auto-provisioned", "auto provisioned"):
+        # The prefix, so "auto-provisioning" is caught as well.
+        for banned in ("auto-provision", "auto provision"):
             if banned in text.lower():
                 offenders.append(f"{path.relative_to(ROOT)}: {banned}")
 
