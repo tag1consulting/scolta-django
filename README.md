@@ -12,6 +12,7 @@ INSTALLED_APPS = [..., "scolta_django"]
 
 SCOLTA = {
     "ai_api_key": env("SCOLTA_API_KEY"),
+    # No default. Omit this and AI features stay off; search is unaffected.
     "ai_provider": "anthropic",
     "site_name": "My Site",
     "indexer": "auto",                 # pure-Python indexer (default)
@@ -116,6 +117,41 @@ Settings:
   if you serve the bundle from a CDN or copy it yourself.
 - `SCOLTA["amazee_access"]` (optional) — callable `(request) -> bool` gating
   the Amazee.ai settings page and JSON endpoints. Default: active staff user.
+
+## Selecting an AI provider is always manual
+
+Scolta ships with **no AI provider selected**. `SCOLTA["ai_provider"]` is empty
+until you set it, and while it is empty AI features are simply off: search
+works, no provider is assumed, and Anthropic in particular is not silently
+assumed. There is no default anywhere. This is going-forward only — a project
+that already sets a provider keeps working exactly as before.
+
+**Amazee.ai is never enabled on its own.** Setting `SCOLTA["ai_provider"] =
+"amazee"` is the manual opt-in, and it is the only thing that permits Scolta to
+establish the free demo connection on first use — the same act as clicking "Try
+the demo" in the admin. With the provider unset or set to anything else, no
+credential is provisioned and no outbound Amazee call is made on any request
+path. First-use provisioning is idempotent, and an explicit `ai_api_key` always
+wins and suppresses Amazee entirely.
+
+In the Amazee.ai settings page there are exactly two actions, and neither runs
+on its own:
+
+- **Try the demo** — one click. No email, no account, no card. Runs until the
+  demo's included credit is used up, and is one-time per site; once used, the
+  page points you at the account path.
+- **Enter your Amazee credentials** — sign in with the email address on your
+  amazee.ai account. Amazee emails a verification code, you pick a region, and
+  your account's credentials are stored for you. If you do not have an account
+  yet, this creates one. You never generate or paste an API key: this mirrors
+  amazee.ai's own `ai_provider_amazeeio` module, so there is deliberately no
+  bring-your-own-key form.
+
+When a connection stops being accepted, AI degrades cleanly, `/health` reports
+it, and the settings page shows a prompt pointing at the account path. Which of
+the two actions established the current connection is recorded when it happens
+rather than inferred afterwards; a connection made before Scolta recorded it
+claims no origin at all.
 
 ## Health endpoint
 

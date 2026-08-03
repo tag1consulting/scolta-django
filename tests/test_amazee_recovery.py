@@ -156,7 +156,11 @@ def test_health_reports_degraded_when_credentials_rejected(staff_client):
 
 @pytest.mark.django_db
 def test_health_usable_when_credentials_accepted(staff_client, settings):
-    settings.SCOLTA = {**settings.SCOLTA, "ai_api_key": "sk-mine"}
+    # A key alone is not a working configuration: there is no default provider,
+    # so a site with a key and no provider selected still has AI off. This case
+    # is about the auth-failure marker, not provider selection, so it selects
+    # one.
+    settings.SCOLTA = {**settings.SCOLTA, "ai_provider": "anthropic", "ai_api_key": "sk-mine"}
     body = json.loads(staff_client.get("/api/scolta/v1/health").content)
     assert body["ai_configured"] is True
     assert body["ai_usable"] is True

@@ -59,6 +59,10 @@ class ScoltaAmazeeConfig(models.Model):
     region = models.CharField(max_length=128, default="")
     ai_model = models.CharField(max_length=128, default="")
     ai_expansion_model = models.CharField(max_length=128, default="")
+    # Which operator action established this connection: "demo", "account", or
+    # "" for a connection made before Scolta recorded it. Empty reads as "not
+    # recorded" and must never be reported as one of the two.
+    connection_source = models.CharField(max_length=32, default="")
 
     class Meta:
         db_table = "scolta_amazee_config"

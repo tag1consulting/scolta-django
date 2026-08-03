@@ -129,7 +129,8 @@ def test_provision_stores_credentials_and_models(client, fake_client):
     creds = DjangoConfigStorage().load()
     assert creds["litellm_token"] == "tok-trial"
     assert DjangoConfigStorage().stored_models()["ai_model"] == "claude-sonnet-4-6"
-    assert ("provision_trial", "a@b.com") in fake_client.calls
+    # Provisioned with no email: trying the demo must cost an operator nothing.
+    assert ("provision_trial", "") in fake_client.calls
 
 
 @pytest.mark.django_db
@@ -312,6 +313,7 @@ def test_full_upgrade_flow(client, fake_client):
     assert (
         client.post(
             "/scolta/amazee/request-code",
+            # The account path does take an email: that is the distinction.
             data=json.dumps({"email": "a@b.com"}),
             content_type="application/json",
         ).status_code
