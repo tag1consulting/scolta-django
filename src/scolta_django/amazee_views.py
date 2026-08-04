@@ -4,7 +4,7 @@ Stateless JSON flow (the admin UI holds the short-lived session token between
 steps, so no server session is required):
 
     GET  scolta/amazee/status
-    POST scolta/amazee/provision        {email?}            -> free trial
+    POST scolta/amazee/provision        {}                  -> free demo (no email)
     POST scolta/amazee/request-code     {email}             -> send OTP
     POST scolta/amazee/sign-in          {email, code}       -> {session_token}
     POST scolta/amazee/regions          {session_token}     -> {regions}
@@ -98,13 +98,29 @@ def status(request) -> JsonResponse:
 @amazee_admin_required
 @require_POST
 def provision(request) -> JsonResponse:
-    data = _body(request) or {}
+    """Establish the free demo connection, on one action and no other input.
+
+    Deliberately reads no email. Trying the demo must cost an operator nothing;
+    an address is what the account flow collects, because amazee.ai needs one to
+    issue a real account. The demo is one-time per site, so a refusal here points
+    at that flow rather than failing opaquely.
+    """
     client, storage = _client(), _storage()
     provisioner = AmazeeTrialProvisioner(client, storage, None, AmazeeModelResolver(client))
     try:
-        result = provisioner.provision(str(data.get("email", "")))
+        result = provisioner.provision()
     except AmazeeApiException as exc:
-        return JsonResponse({"error": str(exc)}, status=502)
+        return JsonResponse(
+            {
+                "error": str(exc),
+                "hint": (
+                    "The free demo can only be used once per site. If this site has already "
+                    'used it, sign in with your email address under "Enter your Amazee '
+                    'credentials" to set up your account.'
+                ),
+            },
+            status=502,
+        )
     if result.ai_model or result.ai_expansion_model:
         storage.store_models(result.ai_model or "", result.ai_expansion_model or "")
     # Fresh credentials are stored — clear any re-authentication prompt.

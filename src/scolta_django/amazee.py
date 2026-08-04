@@ -1,15 +1,31 @@
 """Amazee.ai integration for Django: model-backed credential storage,
-auto-provisioning, and config overrides.
+first-use provisioning under the provider gate, and config overrides.
 
 When Amazee credentials are stored (and no explicit ai_api_key is set), the
 resolved config points the OpenAI-compatible AiClient at the LiteLLM endpoint.
+
+**Nothing here connects a site that did not opt in.** ``SCOLTA["ai_provider"] =
+"amazee"`` in settings is the manual opt-in — a developer wrote it down, the
+same act as clicking "Try the demo" in the Wagtail admin — and it is the gate on
+:func:`maybe_auto_provision`. With the provider unset or set to anything else,
+no credential is provisioned and no outbound Amazee call is made on any request
+path.
 """
 
 from __future__ import annotations
 
 import logging
 
-from scolta.ai.amazee import AutoProvisioner, ConfigStorage, KeyExpiryRecovery
+from scolta.ai.amazee import (
+    AmazeeApiException,
+    AmazeeClient,
+    AmazeeConnectionSource,
+    AmazeeModelResolver,
+    AmazeeTrialProvisioner,
+    AutoProvisioner,
+    KeyExpiryRecovery,
+    ProvenanceAwareConfigStorage,
+)
 
 from . import conf
 from .models import ScoltaAmazeeConfig
@@ -17,8 +33,13 @@ from .models import ScoltaAmazeeConfig
 _logger = logging.getLogger("scolta_django.amazee")
 
 
-class DjangoConfigStorage(ConfigStorage):
-    """Stores Amazee credentials in the ScoltaAmazeeConfig singleton row."""
+class DjangoConfigStorage(ProvenanceAwareConfigStorage):
+    """Stores Amazee credentials in the ScoltaAmazeeConfig singleton row.
+
+    Provenance-aware: it also records which operator action established the
+    connection, so no surface has to guess between the free demo and an
+    operator's own amazee.ai account.
+    """
 
     def store(self, litellm_token: str, litellm_api_url: str, region: str) -> None:
         ScoltaAmazeeConfig.objects.update_or_create(
@@ -41,7 +62,28 @@ class DjangoConfigStorage(ConfigStorage):
         }
 
     def clear(self) -> None:
+        # Deleting the row drops the recorded connection source with the
+        # credentials it describes. Left behind, it would be paired with
+        # whatever connection comes next, which is a guess wearing a recorded
+        # fact's clothes.
         ScoltaAmazeeConfig.objects.filter(pk=1).delete()
+
+    def store_connection_source(self, source: AmazeeConnectionSource) -> None:
+        ScoltaAmazeeConfig.objects.update_or_create(
+            pk=1, defaults={"connection_source": source.value}
+        )
+
+    def load_connection_source(self) -> AmazeeConnectionSource | None:
+        row = ScoltaAmazeeConfig.objects.filter(pk=1).first()
+        stored = getattr(row, "connection_source", "") if row is not None else ""
+        if not stored:
+            # The right answer for a connection made before provenance was
+            # recorded. It must read as "not recorded", never as a default.
+            return None
+        try:
+            return AmazeeConnectionSource(stored)
+        except ValueError:
+            return None
 
     def store_models(self, ai_model: str, ai_expansion_model: str) -> None:
         ScoltaAmazeeConfig.objects.update_or_create(
@@ -128,18 +170,63 @@ def build_key_expiry_recovery() -> KeyExpiryRecovery:
 
 
 def maybe_auto_provision(client=None) -> bool:
-    """Auto-provision a free Amazee trial on first use when provider == 'amazee'
-    and nothing is configured yet. No-op otherwise. Returns True if provisioned."""
+    """Establish the free Amazee demo on first use, under the provider gate.
+
+    **The gate is the opt-in.** ``SCOLTA["ai_provider"] == "amazee"`` in Django
+    settings is a developer's explicit choice, and it is the only thing that
+    permits a connection to be established here. With the provider unset or set
+    to anything else this returns immediately, having read nothing and called
+    nothing — so no request path can enrol a site that did not opt in.
+
+    Idempotent: only an empty credential store establishes a connection, so
+    every later request reuses what is stored. An explicit ``ai_api_key`` wins
+    outright and suppresses Amazee entirely.
+
+    The establishing call is explicit. It used to be delegated to
+    :meth:`AutoProvisioner.ensure_ai_available`, which minted a trial for any
+    caller that reached it with an empty store — a contract removed upstream,
+    because anything else reaching that helper would have enrolled a site that
+    never opted in. That helper now self-heals stored credentials and
+    establishes nothing, so routing this through it would silently do nothing at
+    all.
+
+    Returns True when a connection was established on this call.
+    """
     if conf.get("ai_provider") != "amazee":
         return False
+    if conf.get("ai_api_key"):
+        return False
+
     storage = DjangoConfigStorage()
 
     def _save_models(ai_model: str, ai_expansion_model: str) -> None:
         storage.store_models(ai_model, ai_expansion_model)
 
-    return AutoProvisioner.ensure_ai_available(
+    established = False
+    if storage.load() is None:
+        amazee_client = client or AmazeeClient()
+        try:
+            # No email: the demo needs none, which is the point of it. Attaching
+            # a real amazee.ai account is the email flow in the admin views.
+            result = AmazeeTrialProvisioner(
+                amazee_client, storage, None, AmazeeModelResolver(amazee_client)
+            ).provision()
+        except AmazeeApiException:
+            # The control plane is unreachable or refused — the demo is one-time
+            # per site. AI stays off; the operator reconnects through the admin.
+            _logger.warning("Could not establish the Amazee.ai demo connection.", exc_info=True)
+            return False
+
+        if result.success:
+            established = True
+            if result.ai_model or result.ai_expansion_model:
+                _save_models(result.ai_model or "", result.ai_expansion_model or "")
+
+    # Self-heal only, against credentials already stored: re-resolve model names
+    # when the store has credentials but no model. Never mints.
+    AutoProvisioner.ensure_ai_available(
         storage,
-        has_explicit_api_key=bool(conf.get("ai_api_key")),
+        has_explicit_api_key=False,
         on_models_resolved=_save_models,
         client=client,
         # Report whether models are already resolved. When credentials are
@@ -150,3 +237,5 @@ def maybe_auto_provision(client=None) -> bool:
         # config_overrides() to strand the dated default at the gateway.
         has_resolved_models=lambda: bool(storage.stored_models().get("ai_model")),
     )
+
+    return established
