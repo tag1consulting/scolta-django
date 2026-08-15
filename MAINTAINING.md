@@ -1,4 +1,4 @@
-# MAINTAINING — scolta-django
+# Maintaining scolta-django
 
 The Django and Wagtail adapter over scolta-python. Publishes to PyPI.
 
@@ -23,8 +23,8 @@ resolves a Wagtail that needs Django 5.2) and `Build & validate PyPI artifacts` 
 because `[tool.uv.sources]` points `scolta` at `../scolta-python` for resolution; the `dist` job
 deliberately does not, since building this wheel does not need the binding installed.
 
-**On release day.** Release this after `scolta` is on PyPI, or it won't resolve. **There is no release
-workflow**, so the upload is manual: `uv build` then `twine upload dist/*`.
+**On release day.** Release this after `scolta` is on PyPI, or it won't resolve. There is no release
+workflow, so the upload is manual: `uv build` then `twine upload dist/*`.
 
 **Watch out for.**
 
